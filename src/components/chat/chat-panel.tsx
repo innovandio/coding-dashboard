@@ -313,7 +313,7 @@ export function ChatPanel({
     return items;
   }, [events, sessionKey]);
 
-  // Merge: history turns + live overlay
+  // Merge: history turns + live overlay (only in-progress items from live)
   const allItems = useMemo((): DisplayItem[] => {
     const items: DisplayItem[] = [];
 
@@ -332,7 +332,13 @@ export function ChatPanel({
       }
     }
 
-    items.push(...liveItems);
+    // Only append live items that are still streaming (in-progress).
+    // Completed runs are already represented in historyTurns after the
+    // next fetchTurns() call, so including them here causes duplication.
+    for (const item of liveItems) {
+      if (item.type === "assistant" && !item.isStreaming) continue;
+      items.push(item);
+    }
     return items;
   }, [historyTurns, liveItems]);
 
