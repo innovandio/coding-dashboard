@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: operator
+      POSTGRES_PASSWORD: operator
+      POSTGRES_DB: operator
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+
+  adminer:
+    image: adminer
+    ports:
+      - "8089:8080"
+    depends_on:
+      - postgres
+
+volumes:
+  pgdata:
