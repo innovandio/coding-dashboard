@@ -130,3 +130,36 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ANSI terminal colors (ansi_up with use_classes=true) */
+.ansi-black-fg   { color: #555; }
+.ansi-red-fg     { color: #e06c75; }
+.ansi-green-fg   { color: #98c379; }
+.ansi-yellow-fg  { color: #e5c07b; }
+.ansi-blue-fg    { color: #61afef; }
+.ansi-magenta-fg { color: #c678dd; }
+.ansi-cyan-fg    { color: #56b6c2; }
+.ansi-white-fg   { color: #dcdfe4; }
+
+.ansi-bright-black-fg   { color: #7f848e; }
+.ansi-bright-red-fg     { color: #e06c75; }
+.ansi-bright-green-fg   { color: #98c379; }
+.ansi-bright-yellow-fg  { color: #e5c07b; }
+.ansi-bright-blue-fg    { color: #61afef; }
+.ansi-bright-magenta-fg { color: #c678dd; }
+.ansi-bright-cyan-fg    { color: #56b6c2; }
+.ansi-bright-white-fg   { color: #fff; }
+
+.ansi-black-bg   { background-color: #282c34; }
+.ansi-red-bg     { background-color: #e06c75; }
+.ansi-green-bg   { background-color: #98c379; }
+.ansi-yellow-bg  { background-color: #e5c07b; }
+.ansi-blue-bg    { background-color: #61afef; }
+.ansi-magenta-bg { background-color: #c678dd; }
+.ansi-cyan-bg    { background-color: #56b6c2; }
+.ansi-white-bg   { background-color: #dcdfe4; }
+
+.ansi-bold    { font-weight: bold; }
+.ansi-dim     { opacity: 0.7; }
+.ansi-italic  { font-style: italic; }
+.ansi-underline { text-decoration: underline; }

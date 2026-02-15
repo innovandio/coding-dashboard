@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "check-tmux": "./scripts/check-tmux.sh",
+    "predev": "npm run check-tmux",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -10,6 +12,7 @@
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
+    "ansi_up": "^6.0.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.564.0",

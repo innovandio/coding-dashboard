@@ -4,5 +4,8 @@ export async function register() {
     startIngestor();
     // Start GSD file watchers immediately (don't wait for gateway connection)
     refreshGsdWatchers();
+
+    const { startTmuxScanner } = await import("./lib/tmux-scanner");
+    startTmuxScanner();
   }
 }

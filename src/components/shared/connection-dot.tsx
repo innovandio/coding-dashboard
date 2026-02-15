@@ -25,7 +25,8 @@ const labels: Record<Status, string> = {
   disconnected: "No Gateway",
 };
 
-export function ConnectionDot({ status }: { status: Status }) {
+export function ConnectionDot({ status, label }: { status: Status; label?: string }) {
+  const displayLabel = label ?? labels[status] ?? status;
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -34,12 +35,12 @@ export function ConnectionDot({ status }: { status: Status }) {
             className={cn("h-2.5 w-2.5 rounded-full", colors[status] ?? colors.disconnected)}
           />
           <span className="text-xs text-muted-foreground">
-            {labels[status] ?? status}
+            {displayLabel}
           </span>
         </span>
       </TooltipTrigger>
       <TooltipContent>
-        <p>Gateway: {labels[status] ?? status}</p>
+        <p>{displayLabel}</p>
       </TooltipContent>
     </Tooltip>
   );

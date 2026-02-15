@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db";
 import { sendGatewayRequest } from "@/lib/gateway-ingestor";
 import { randomUUID } from "crypto";
+import {
+  ensureTmuxSession,
+  launchClaudeInSession,
+  registerManagedSession,
+  tmuxSessionName,
+} from "@/lib/tmux-scanner";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +17,7 @@ function buildSessionKey(agentId: string): string {
   return `agent:${normalized}:main`;
 }
 
-function buildInitialMessage(projectName: string, workspacePath: string): string {
+function buildInitialMessage(projectName: string, workspacePath: string, tmuxSession?: string): string {
   return `You are the dedicated autonomous agent for the project "${projectName}".
 Your workspace is at: ${workspacePath}
 
@@ -67,7 +73,12 @@ Once all phases pass verification:
 - If you hit context limits mid-phase, use \`/gsd:pause-work\` then \`/gsd:resume-work\`
 - If a phase fails verification repeatedly (3+ times), pause and report the issue — do not loop forever
 - Provide brief status updates between phases so progress can be monitored
+${tmuxSession ? `
+## Terminal session
 
+A tmux session named "${tmuxSession}" is running at your workspace. You can use it to run
+long-running processes or monitor output. Access it via: tmux attach -t ${tmuxSession}
+` : ""}
 Begin now.`;
 }
 
@@ -79,6 +90,33 @@ export async function POST(req: NextRequest) {
 
   const pool = getPool();
 
+  // Look up the project (needed for both new and existing sessions)
+  const project = await pool.query(
+    `SELECT agent_id, name, workspace_path FROM projects WHERE id = $1`,
+    [projectId]
+  );
+  const row = project.rows[0];
+  const agentId = row?.agent_id ?? projectId;
+  const projectName = row?.name ?? projectId;
+  const workspacePath = row?.workspace_path ?? "";
+
+  // Always ensure tmux session exists and is registered (survives server restarts)
+  const tmuxName = tmuxSessionName(projectId);
+  try {
+    await ensureTmuxSession(projectId);
+    if (workspacePath) {
+      await launchClaudeInSession(tmuxName, workspacePath);
+    }
+    registerManagedSession(projectId, tmuxName, workspacePath);
+
+    await pool.query(
+      `UPDATE projects SET meta = COALESCE(meta, '{}'::jsonb) || $1::jsonb WHERE id = $2`,
+      [JSON.stringify({ tmux_session: tmuxName }), projectId]
+    );
+  } catch (err) {
+    console.warn("[chat.session] Failed to set up tmux session:", err);
+  }
+
   // Check if project already has a chat session
   const existing = await pool.query(
     `SELECT id, session_key FROM sessions WHERE project_id = $1 AND meta->>'type' = 'chat' LIMIT 1`,
@@ -89,18 +127,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       sessionId: existing.rows[0].id,
       sessionKey: existing.rows[0].session_key,
+      tmuxSession: tmuxName,
     });
   }
-
-  // Look up the project
-  const project = await pool.query(
-    `SELECT agent_id, name, workspace_path FROM projects WHERE id = $1`,
-    [projectId]
-  );
-  const row = project.rows[0];
-  const agentId = row?.agent_id ?? projectId;
-  const projectName = row?.name ?? projectId;
-  const workspacePath = row?.workspace_path ?? "";
 
   // Build session key directly — gateway accepts agent:<agentId>:main format
   const sessionKey = buildSessionKey(agentId);
@@ -115,7 +144,7 @@ export async function POST(req: NextRequest) {
 
   // First session — send initial orientation message
   if (workspacePath) {
-    const message = buildInitialMessage(projectName, workspacePath);
+    const message = buildInitialMessage(projectName, workspacePath, tmuxName);
     sendGatewayRequest("chat.send", {
       sessionKey,
       message,
@@ -125,5 +154,5 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  return NextResponse.json({ sessionId, sessionKey, isNew: true });
+  return NextResponse.json({ sessionId, sessionKey, tmuxSession: tmuxName, isNew: true });
 }
