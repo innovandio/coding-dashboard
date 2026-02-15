@@ -11,6 +11,9 @@ export interface TmuxSession {
 export interface TmuxOutputEvent {
   session: string;
   output: string;
+  cursorX: number;
+  cursorY: number;
+  paneHeight: number;
   timestamp: string;
 }
 
@@ -30,6 +33,7 @@ interface TmuxScannerState {
   captureTimer: ReturnType<typeof setTimeout> | null;
   activeCapture: string | null;
   lastOutput: string;
+  lastCursor: string;
   lastActivity: number;
   clientCount: number;
   managedSessions: Map<string, ManagedSession>;
@@ -49,6 +53,7 @@ function getState(): TmuxScannerState {
       captureTimer: null,
       activeCapture: null,
       lastOutput: "",
+      lastCursor: "",
       lastActivity: 0,
       clientCount: 0,
       managedSessions: new Map(),
@@ -129,21 +134,34 @@ async function pollCapture() {
   if (!state.activeCapture) return;
 
   try {
-    const output = await runTmux([
-      "capture-pane",
-      "-p",
-      "-e",
-      "-t",
-      state.activeCapture,
-      "-S",
-      "-500",
+    const [output, cursorInfo] = await Promise.all([
+      runTmux([
+        "capture-pane",
+        "-p",
+        "-e",
+        "-t",
+        state.activeCapture,
+      ]),
+      runTmux([
+        "display-message",
+        "-t",
+        state.activeCapture,
+        "-p",
+        "#{cursor_x},#{cursor_y},#{pane_height}",
+      ]),
     ]);
-    if (output !== state.lastOutput) {
+    const cursorKey = cursorInfo.trim();
+    const [cx, cy, ph] = cursorKey.split(",").map(Number);
+    if (output !== state.lastOutput || cursorKey !== state.lastCursor) {
       state.lastOutput = output;
+      state.lastCursor = cursorKey;
       state.lastActivity = Date.now();
       const event: TmuxOutputEvent = {
         session: state.activeCapture,
         output,
+        cursorX: cx || 0,
+        cursorY: cy || 0,
+        paneHeight: ph || 0,
         timestamp: new Date().toISOString(),
       };
       state.emitter.emit("tmux:output", event);
@@ -152,6 +170,7 @@ async function pollCapture() {
     // Session may have been killed — stop capture
     state.activeCapture = null;
     state.lastOutput = "";
+    state.lastCursor = "";
     stopCapturePolling();
   }
 

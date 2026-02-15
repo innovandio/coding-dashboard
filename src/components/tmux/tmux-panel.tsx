@@ -10,6 +10,14 @@ import { AnsiUp } from "ansi_up";
 const ansi = new AnsiUp();
 ansi.use_classes = true;
 
+// ansi_up ignores SGR 7 (reverse video), but TUI apps like Claude Code use it
+// to draw their cursor. Simulate it by swapping fg/bg colors.
+function simulateReverseVideo(text: string): string {
+  return text
+    .replace(/\x1b\[7m/g, "\x1b[7m\x1b[38;2;30;30;30m\x1b[48;2;204;204;204m")
+    .replace(/\x1b\[27m/g, "\x1b[27m\x1b[39m\x1b[49m");
+}
+
 // Map browser key events to tmux send-keys arguments
 const SPECIAL_KEYS: Record<string, string> = {
   Enter: "Enter",
@@ -80,7 +88,10 @@ export function TmuxPanel({ projectId }: { projectId: string | null }) {
   const [focused, setFocused] = useState(false);
   const lastSizeRef = useRef<string>("");
 
-  const html = useMemo(() => (output ? ansi.ansi_to_html(output) : ""), [output]);
+  const html = useMemo(
+    () => (output ? ansi.ansi_to_html(simulateReverseVideo(output)) : ""),
+    [output]
+  );
 
   // Auto-scroll to bottom when output changes
   useEffect(() => {
@@ -89,21 +100,21 @@ export function TmuxPanel({ projectId }: { projectId: string | null }) {
     }
   }, [html]);
 
-  // Sync tmux window size to panel dimensions
+  // Measure character size and sync tmux window size to panel dimensions
   useEffect(() => {
     if (!sessionName || !preRef.current) return;
 
     const el = preRef.current;
 
     const syncSize = () => {
-      const { charWidth, lineHeight } = measureCharSize(el);
-      if (!charWidth || !lineHeight) return;
+      const measured = measureCharSize(el);
+      if (!measured.charWidth || !measured.lineHeight) return;
 
       const style = getComputedStyle(el);
       const padX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
       const padY = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
-      const cols = Math.floor((el.clientWidth - padX) / charWidth);
-      const rows = Math.floor((el.clientHeight - padY) / lineHeight);
+      const cols = Math.floor((el.clientWidth - padX) / measured.charWidth);
+      const rows = Math.floor((el.clientHeight - padY) / measured.lineHeight);
 
       if (cols < 1 || rows < 1) return;
 
