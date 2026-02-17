@@ -184,23 +184,6 @@ export function useDashboardState() {
     setEvents([]);
   }, [selectedProjectId, fetchSessions]);
 
-  // Load initial events from history
-  useEffect(() => {
-    const loadHistory = async () => {
-      try {
-        const params = new URLSearchParams({ limit: "500" });
-        if (selectedProjectId) params.set("project_id", selectedProjectId);
-        if (selectedSessionId) params.set("session_id", selectedSessionId);
-        const res = await fetch(`/api/events?${params.toString()}`);
-        const data: BusEvent[] = await res.json();
-        setEvents(data.reverse());
-      } catch {
-        // ignore
-      }
-    };
-    loadHistory();
-  }, [selectedProjectId, selectedSessionId]);
-
   return {
     projects,
     selectedProjectId,

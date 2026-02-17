@@ -13,6 +13,13 @@ export type BusEvent = {
 
 const globalForBus = globalThis as unknown as { eventBus?: EventEmitter };
 
+// Synthetic ID counter for bus-only events (negative to avoid collision with DB bigserial)
+let syntheticIdCounter = 0;
+
+export function nextSyntheticId(): number {
+  return --syntheticIdCounter;
+}
+
 export function getEventBus(): EventEmitter {
   if (!globalForBus.eventBus) {
     const bus = new EventEmitter();

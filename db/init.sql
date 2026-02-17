@@ -22,21 +22,6 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS sessions_project_id_idx ON sessions(project_id);
 CREATE INDEX IF NOT EXISTS sessions_session_key_idx ON sessions(session_key);
 
--- Events (append-only, tagged with project + session)
-CREATE TABLE IF NOT EXISTS events (
-  id bigserial PRIMARY KEY,
-  project_id text REFERENCES projects(id),
-  session_id text REFERENCES sessions(id),
-  agent_id text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  source text NOT NULL,
-  event_type text NOT NULL,
-  payload jsonb NOT NULL
-);
-CREATE INDEX IF NOT EXISTS events_project_session_idx ON events(project_id, session_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS events_event_type_idx ON events(event_type);
-CREATE INDEX IF NOT EXISTS events_payload_gin_idx ON events USING gin (payload);
-
 -- GSD Tasks (per project)
 CREATE TABLE IF NOT EXISTS gsd_tasks (
   id text PRIMARY KEY,

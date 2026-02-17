@@ -1,11 +1,91 @@
+import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 import WebSocket from "ws";
 import { getPool } from "./db";
-import { getEventBus, type BusEvent } from "./event-bus";
+import { getEventBus, nextSyntheticId, type BusEvent } from "./event-bus";
 import { initGsdWatchers } from "./gsd-watcher";
 import type {
   ConnectionState,
   GatewayRequest,
 } from "./gateway-protocol";
+
+// --- Device identity for gateway auth (Ed25519) ---
+
+interface DeviceIdentity {
+  deviceId: string;
+  publicKeyPem: string;
+  privateKeyPem: string;
+}
+
+const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
+
+function base64UrlEncode(buf: Buffer): string {
+  return buf.toString("base64").replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/g, "");
+}
+
+function derivePublicKeyRaw(publicKeyPem: string): Buffer {
+  const key = crypto.createPublicKey(publicKeyPem);
+  const spki = key.export({ type: "spki", format: "der" }) as Buffer;
+  if (
+    spki.length === ED25519_SPKI_PREFIX.length + 32 &&
+    spki.subarray(0, ED25519_SPKI_PREFIX.length).equals(ED25519_SPKI_PREFIX)
+  ) {
+    return spki.subarray(ED25519_SPKI_PREFIX.length);
+  }
+  return spki;
+}
+
+function loadOrCreateDeviceIdentity(): DeviceIdentity {
+  const identityDir = path.join(
+    process.env.HOME ?? "/tmp",
+    ".openclaw",
+    "identity"
+  );
+  const filePath = path.join(identityDir, "dashboard-device.json");
+
+  try {
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, "utf8");
+      const parsed = JSON.parse(raw);
+      if (parsed?.version === 1 && parsed.deviceId && parsed.publicKeyPem && parsed.privateKeyPem) {
+        return parsed;
+      }
+    }
+  } catch { /* regenerate */ }
+
+  const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
+  const publicKeyPem = publicKey.export({ type: "spki", format: "pem" }).toString();
+  const privateKeyPem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+  const rawKey = derivePublicKeyRaw(publicKeyPem);
+  const deviceId = crypto.createHash("sha256").update(rawKey).digest("hex");
+
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(
+    filePath,
+    JSON.stringify({ version: 1, deviceId, publicKeyPem, privateKeyPem, createdAtMs: Date.now() }, null, 2) + "\n",
+    { mode: 0o600 }
+  );
+  return { deviceId, publicKeyPem, privateKeyPem };
+}
+
+function buildDeviceConnect(identity: DeviceIdentity, scopes: string[], token: string) {
+  const signedAt = Date.now();
+  const payload = [
+    "v1", identity.deviceId, "gateway-client", "backend", "operator",
+    scopes.join(","), String(signedAt), token,
+  ].join("|");
+
+  const privateKey = crypto.createPrivateKey(identity.privateKeyPem);
+  const sig = crypto.sign(null, Buffer.from(payload, "utf8"), privateKey);
+
+  return {
+    id: identity.deviceId,
+    publicKey: base64UrlEncode(derivePublicKeyRaw(identity.publicKeyPem)),
+    signature: base64UrlEncode(sig),
+    signedAt,
+  };
+}
 
 interface PendingRequest {
   resolve: (payload: Record<string, unknown>) => void;
@@ -24,8 +104,22 @@ interface IngestorState {
   pendingRequests: Map<string, PendingRequest>;
 }
 
-// Cache: sessionKey -> { projectId, sessionId }
-const sessionKeyCache = new Map<string, { projectId: string; sessionId: string }>();
+// Cache: sessionKey -> { projectId, sessionId, agentId }
+const sessionKeyCache = new Map<
+  string,
+  { projectId: string; sessionId: string; agentId: string }
+>();
+
+function shouldEmit(eventType: string, payload: Record<string, unknown>): boolean {
+  if (eventType === "tick") return false;
+  if (
+    eventType === "agent" &&
+    (payload.data as Record<string, unknown> | undefined)?.text ===
+      "HEARTBEAT_OK"
+  )
+    return false;
+  return true;
+}
 
 const globalForIngestor = globalThis as unknown as {
   ingestorStarted?: boolean;
@@ -143,6 +237,8 @@ export function startIngestor() {
     return;
   }
 
+  const deviceIdentity = loadOrCreateDeviceIdentity();
+  const connectScopes = ["operator.admin", "operator.read", "operator.write"];
   const pool = getPool();
   const bus = getEventBus();
 
@@ -182,14 +278,15 @@ export function startIngestor() {
           minProtocol: 3,
           maxProtocol: 3,
           role: "operator",
-          scopes: ["operator.admin"],
+          scopes: connectScopes,
           client: {
-            id: "cli",
+            id: "gateway-client",
             version: "1.0.0",
             platform: "node",
-            mode: "cli",
+            mode: "backend",
           },
           auth: { token: gatewayToken },
+          device: buildDeviceConnect(deviceIdentity, connectScopes, gatewayToken!),
         });
         return;
       }
@@ -267,14 +364,19 @@ export function startIngestor() {
           null;
 
         if (agentId) state.agentIds.add(agentId);
-        if (eventName === "tick") state.lastTickAt = Date.now();
+
+        // Tick: update in-memory timestamp and skip everything else
+        if (eventName === "tick") {
+          state.lastTickAt = Date.now();
+          return;
+        }
 
         // Resolve sessionKey to projectId/sessionId for chat and agent events
         if ((eventName === "chat" || eventName === "agent") && payload.sessionKey) {
           const sessionKey = payload.sessionKey as string;
           const resolved = await resolveSessionKey(sessionKey);
           if (resolved) {
-            agentId = agentId ?? resolved.projectId; // agentId = projectId for auto-created projects
+            agentId = agentId ?? resolved.agentId;
             sessionId = sessionId ?? resolved.sessionId;
           }
         }
@@ -285,7 +387,7 @@ export function startIngestor() {
           await ensureSession(sessionId, projectId);
         }
 
-        await insertEvent(
+        await handleEvent(
           projectId,
           sessionId,
           agentId,
@@ -318,19 +420,23 @@ export function startIngestor() {
 
     async function resolveSessionKey(
       sessionKey: string
-    ): Promise<{ projectId: string; sessionId: string } | null> {
+    ): Promise<{ projectId: string; sessionId: string; agentId: string } | null> {
       const cached = sessionKeyCache.get(sessionKey);
       if (cached) return cached;
 
       try {
         const result = await pool.query(
-          `SELECT id, project_id FROM sessions WHERE session_key = $1 LIMIT 1`,
+          `SELECT s.id, s.project_id, p.agent_id
+           FROM sessions s
+           JOIN projects p ON p.id = s.project_id
+           WHERE s.session_key = $1 LIMIT 1`,
           [sessionKey]
         );
         if (result.rows.length > 0) {
           const entry = {
             projectId: result.rows[0].project_id,
             sessionId: result.rows[0].id,
+            agentId: result.rows[0].agent_id,
           };
           sessionKeyCache.set(sessionKey, entry);
           return entry;
@@ -341,7 +447,7 @@ export function startIngestor() {
       return null;
     }
 
-    async function insertEvent(
+    function handleEvent(
       projectId: string | null,
       sessionId: string | null,
       agentId: string | null,
@@ -349,28 +455,20 @@ export function startIngestor() {
       eventType: string,
       payload: unknown
     ) {
-      try {
-        const result = await pool.query(
-          `INSERT INTO events (project_id, session_id, agent_id, source, event_type, payload)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           RETURNING id, created_at`,
-          [projectId, sessionId, agentId, source, eventType, JSON.stringify(payload)]
-        );
-        const row = result.rows[0];
-        const busEvent: BusEvent = {
-          id: row.id,
-          project_id: projectId,
-          session_id: sessionId,
-          agent_id: agentId,
-          source,
-          event_type: eventType,
-          payload: payload as Record<string, unknown>,
-          created_at: row.created_at,
-        };
-        bus.emit("event", busEvent);
-      } catch (err) {
-        console.error("[ingestor] DB insert error:", err);
-      }
+      const p = payload as Record<string, unknown>;
+      if (!shouldEmit(eventType, p)) return;
+
+      const busEvent: BusEvent = {
+        id: nextSyntheticId(),
+        project_id: projectId,
+        session_id: sessionId,
+        agent_id: agentId,
+        source,
+        event_type: eventType,
+        payload: p,
+        created_at: new Date().toISOString(),
+      };
+      bus.emit("event", busEvent);
     }
 
     async function ensureProject(agentId: string): Promise<string> {

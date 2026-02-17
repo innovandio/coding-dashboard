@@ -36,7 +36,7 @@ function extractContent(raw: unknown): { thinking: string; text: string } {
 }
 
 type DisplayItem =
-  | { type: "user"; id: string; text: string }
+  | { type: "user"; id: string; text: string; ts?: number }
   | {
       type: "assistant";
       id: string;
@@ -101,6 +101,9 @@ export function ChatPanel({
     };
   }, [projectId]);
 
+  // Track when history was last fetched so we only overlay genuinely new live items
+  const historyFetchedAt = useRef<number>(0);
+
   // Fetch structured turns from Gateway history
   const fetchTurns = useCallback(async () => {
     if (!sessionKey) return;
@@ -111,6 +114,7 @@ export function ChatPanel({
       if (!res.ok) return;
       const data = await res.json();
       setHistoryTurns(data.turns ?? []);
+      historyFetchedAt.current = Date.now();
     } catch {
       // ignore
     }
@@ -143,7 +147,7 @@ export function ChatPanel({
     }
     const runStates = new Map<string, RunState>();
     const orderedItems: Array<
-      | { eventId: number; type: "user"; text: string; id: string }
+      | { eventId: number; type: "user"; text: string; id: string; ts: number }
       | { eventId: number; type: "run"; runId: string }
     > = [];
     const seenRunIds = new Set<string>();
@@ -181,11 +185,13 @@ export function ChatPanel({
         const role = payload.role as string | undefined;
         if (role === "user") {
           const { text } = extractContent(payload.content);
+          const ts = ev.created_at ? new Date(ev.created_at).getTime() : 0;
           orderedItems.push({
             eventId: numericId,
             type: "user",
             text,
             id: String(ev.id),
+            ts,
           });
           continue;
         }
@@ -288,7 +294,7 @@ export function ChatPanel({
     const items: DisplayItem[] = [];
     for (const item of orderedItems) {
       if (item.type === "user") {
-        items.push({ type: "user", id: item.id, text: item.text });
+        items.push({ type: "user", id: item.id, text: item.text, ts: item.ts });
       } else {
         const run = runStates.get(item.runId)!;
         const isDone = run.isFinal || run.agentEnded;
@@ -335,8 +341,20 @@ export function ChatPanel({
     // Only append live items that are still streaming (in-progress).
     // Completed runs are already represented in historyTurns after the
     // next fetchTurns() call, so including them here causes duplication.
+    // User messages: only show those sent AFTER the last history fetch
+    // (for instant feedback). Older messages are either already in
+    // historyTurns or were never delivered — either way, skip them.
     for (const item of liveItems) {
       if (item.type === "assistant" && !item.isStreaming) continue;
+      if (item.type === "user") {
+        // Skip messages from before the last history fetch
+        if (item.ts && item.ts < historyFetchedAt.current) continue;
+        const text = item.text.trim();
+        const alreadyInHistory = items.some(
+          (h) => h.type === "user" && h.text.includes(text)
+        );
+        if (alreadyInHistory) continue;
+      }
       items.push(item);
     }
     return items;

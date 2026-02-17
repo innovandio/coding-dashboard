@@ -39,6 +39,12 @@ export interface ConversationTurn {
   toolCalls?: ConversationToolCall[];
 }
 
+/** Strip ANSI escape sequences (SGR, cursor movement, DEC private mode, etc.) */
+function stripAnsi(str: string): string {
+  // eslint-disable-next-line no-control-regex
+  return str.replace(/\x1B\[[\?]?[0-9;]*[a-zA-Z]|\x1B\][^\x07]*\x07|\x1B[()][A-Z0-9]/g, "");
+}
+
 /**
  * Parses Gateway chat history into structured ConversationTurn[].
  * Each user message becomes a user turn; each assistant message becomes
@@ -63,13 +69,15 @@ export async function GET(req: NextRequest) {
 
     for (const msg of messages) {
       if (msg.role === "user") {
-        const text =
+        const raw =
           typeof msg.content === "string"
             ? msg.content
             : (msg.content ?? [])
                 .filter((b) => b.type === "text")
                 .map((b) => b.text ?? "")
                 .join("");
+        // Gateway user messages may include system context with ANSI codes
+        const text = stripAnsi(raw);
         turns.push({ role: "user", text });
       } else if (msg.role === "assistant" && Array.isArray(msg.content)) {
         const thinkingParts: string[] = [];

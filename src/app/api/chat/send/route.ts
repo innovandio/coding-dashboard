@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getPool } from "@/lib/db";
-import { getEventBus, type BusEvent } from "@/lib/event-bus";
+import { getEventBus, nextSyntheticId, type BusEvent } from "@/lib/event-bus";
 import { sendGatewayRequest } from "@/lib/gateway-ingestor";
 import { randomUUID } from "crypto";
 
@@ -15,45 +14,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const pool = getPool();
   const bus = getEventBus();
 
-  // Look up project_id for this session
-  let projectId: string | null = null;
-  if (sessionId) {
-    const session = await pool.query(
-      `SELECT project_id FROM sessions WHERE id = $1`,
-      [sessionId]
-    );
-    if (session.rows.length > 0) {
-      projectId = session.rows[0].project_id;
-    }
-  }
-
-  // Store user message as event
-  const userPayload = {
-    sessionKey,
-    role: "user",
-    content: message,
-  };
-
-  const result = await pool.query(
-    `INSERT INTO events (project_id, session_id, agent_id, source, event_type, payload)
-     VALUES ($1, $2, $3, 'user', 'chat', $4)
-     RETURNING id, created_at`,
-    [projectId, sessionId, projectId, JSON.stringify(userPayload)]
-  );
-
-  const row = result.rows[0];
+  // Emit on bus for instant SSE feedback (no DB persist)
   const busEvent: BusEvent = {
-    id: row.id,
-    project_id: projectId,
-    session_id: sessionId,
-    agent_id: projectId,
+    id: nextSyntheticId(),
+    project_id: null,
+    session_id: sessionId ?? null,
+    agent_id: null,
     source: "user",
     event_type: "chat",
-    payload: userPayload,
-    created_at: row.created_at,
+    payload: {
+      sessionKey,
+      role: "user",
+      content: message,
+    },
+    created_at: new Date().toISOString(),
   };
   bus.emit("event", busEvent);
 
