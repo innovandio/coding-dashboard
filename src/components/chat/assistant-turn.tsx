@@ -3,9 +3,10 @@
 import { useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { AlertTriangle, XCircle } from "lucide-react";
 import { ToolCallRow } from "@/components/activity/tool-call-item";
 import { proseClasses } from "./chat-message";
-import type { ConversationToolCall } from "@/app/api/chat/activity/route";
+import type { ConversationToolCall, TurnError } from "@/app/api/chat/activity/route";
 import type { ToolCallItem } from "@/components/activity/use-agent-activity";
 
 function toToolCallItem(tc: ConversationToolCall): ToolCallItem {
@@ -20,16 +21,28 @@ function toToolCallItem(tc: ConversationToolCall): ToolCallItem {
   };
 }
 
+function errorTypeLabel(type: string): string {
+  switch (type) {
+    case "rate_limit_error": return "Rate limited";
+    case "overloaded_error": return "API overloaded";
+    case "api_error": return "API error";
+    case "authentication_error": return "Auth error";
+    default: return type.replace(/_/g, " ");
+  }
+}
+
 export function AssistantTurn({
   thinking,
   toolCalls,
   text,
   isStreaming,
+  error,
 }: {
   thinking?: string;
   toolCalls?: ConversationToolCall[];
   text: string;
   isStreaming?: boolean;
+  error?: TurnError;
 }) {
   const [thinkingOpen, setThinkingOpen] = useState(false);
 
@@ -60,9 +73,26 @@ export function AssistantTurn({
             ))}
           </div>
         )}
-        {(text || !isStreaming) && (
+        {text && (
           <div className={proseClasses}>
-            <Markdown remarkPlugins={[remarkGfm]}>{text || "\u200b"}</Markdown>
+            <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
+          </div>
+        )}
+        {error && (
+          <div className={`flex items-center gap-1.5 px-2 py-1 rounded text-[0.65rem] ${
+            error.isFinal
+              ? "bg-red-500/10 border border-red-500/20 text-red-400"
+              : "bg-yellow-500/10 border border-yellow-500/20 text-yellow-400"
+          }`}>
+            {error.isFinal ? (
+              <XCircle className="h-3 w-3 shrink-0" />
+            ) : (
+              <AlertTriangle className="h-3 w-3 shrink-0" />
+            )}
+            <span>
+              {errorTypeLabel(error.type)}
+              {error.retryCount > 1 && ` (×${error.retryCount})`}
+            </span>
           </div>
         )}
         {isStreaming && (

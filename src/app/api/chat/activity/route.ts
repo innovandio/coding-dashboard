@@ -21,6 +21,8 @@ interface HistoryMessage {
   details?: unknown;
   isError?: boolean;
   timestamp?: number;
+  stopReason?: string;
+  errorMessage?: string;
 }
 
 export interface ConversationToolCall {
@@ -32,11 +34,37 @@ export interface ConversationToolCall {
   isError: boolean;
 }
 
+export interface TurnError {
+  message: string;
+  type: string;
+  retryCount: number;
+  isFinal: boolean;
+}
+
 export interface ConversationTurn {
   role: "user" | "assistant";
   text: string;
   thinking?: string;
   toolCalls?: ConversationToolCall[];
+  error?: TurnError;
+}
+
+/** Parse an error message string (e.g. "429 {json}") into type + message. */
+function parseErrorMessage(raw: string): { type: string; message: string } {
+  try {
+    const jsonStart = raw.indexOf("{");
+    if (jsonStart !== -1) {
+      const json = JSON.parse(raw.slice(jsonStart));
+      const errObj = json.error ?? json;
+      return {
+        type: errObj.type ?? "unknown_error",
+        message: errObj.message ?? raw,
+      };
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return { type: "unknown_error", message: raw };
 }
 
 /** Strip ANSI escape sequences (SGR, cursor movement, DEC private mode, etc.) */
@@ -106,12 +134,39 @@ export async function GET(req: NextRequest) {
           }
         }
 
+        const text = textParts.join("");
+        const thinking = thinkingParts.join("\n");
+
+        // Handle error responses (e.g. 429 rate limit, overloaded, etc.)
+        if (msg.stopReason === "error" && msg.errorMessage) {
+          const parsed = parseErrorMessage(msg.errorMessage);
+          const lastTurn = turns[turns.length - 1];
+          if (lastTurn?.error && lastTurn.error.type === parsed.type) {
+            lastTurn.error.retryCount++;
+          } else {
+            turns.push({
+              role: "assistant",
+              text: text || "",
+              error: {
+                message: parsed.message,
+                type: parsed.type,
+                retryCount: 1,
+                isFinal: false,
+              },
+            });
+          }
+          continue;
+        }
+
+        // Skip empty turns (tool-call-only with no text)
+        if (!text && !thinking && toolCalls.length === 0) continue;
+
         const turn: ConversationTurn = {
           role: "assistant",
-          text: textParts.join(""),
+          text,
         };
-        if (thinkingParts.length > 0) {
-          turn.thinking = thinkingParts.join("\n");
+        if (thinking) {
+          turn.thinking = thinking;
         }
         if (toolCalls.length > 0) {
           turn.toolCalls = toolCalls;
@@ -123,6 +178,15 @@ export async function GET(req: NextRequest) {
           tc.result = msg.details ?? msg.content;
           tc.isError = msg.isError ?? false;
         }
+      }
+    }
+
+    // Mark trailing error turns as final (no successful response followed)
+    for (let i = turns.length - 1; i >= 0; i--) {
+      if (turns[i].error) {
+        turns[i].error!.isFinal = true;
+      } else {
+        break;
       }
     }
 

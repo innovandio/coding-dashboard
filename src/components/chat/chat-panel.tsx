@@ -9,7 +9,7 @@ import { LifecycleBanner } from "./lifecycle-banner";
 import { ChatInput } from "./chat-input";
 import { useAgentActivity } from "@/components/activity/use-agent-activity";
 import { formatArgsSummary } from "@/lib/format-args";
-import type { ConversationTurn, ConversationToolCall } from "@/app/api/chat/activity/route";
+import type { ConversationTurn, ConversationToolCall, TurnError } from "@/app/api/chat/activity/route";
 import type { BusEvent } from "@/lib/event-bus";
 
 interface ContentBlock {
@@ -44,6 +44,7 @@ type DisplayItem =
       thinking?: string;
       toolCalls?: ConversationToolCall[];
       isStreaming?: boolean;
+      error?: TurnError;
     };
 
 export function ChatPanel({
@@ -334,6 +335,7 @@ export function ChatPanel({
           text: turn.text,
           thinking: turn.thinking,
           toolCalls: turn.toolCalls,
+          error: turn.error,
         });
       }
     }
@@ -473,6 +475,7 @@ export function ChatPanel({
                   toolCalls={item.toolCalls}
                   text={item.text}
                   isStreaming={item.isStreaming}
+                  error={item.error}
                 />
               )
             )}
