@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db";
 import { refreshGsdWatchers } from "@/lib/gateway-ingestor";
+import { scaffoldAgentFiles } from "@/lib/agent-scaffold";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,17 @@ export async function POST(req: NextRequest) {
      ON CONFLICT (id) DO UPDATE SET name = $3, workspace_path = $4`,
     [id, agent_id, name, workspace_path ?? null]
   );
+
+  // Scaffold agent MD files into the workspace (no-clobber)
+  if (workspace_path) {
+    scaffoldAgentFiles({
+      projectId: id,
+      projectName: name,
+      workspacePath: workspace_path,
+    }).catch((err) => {
+      console.warn(`[projects] Failed to scaffold agent files for ${id}:`, err);
+    });
+  }
 
   // Refresh GSD watchers to include the new/updated project
   refreshGsdWatchers();

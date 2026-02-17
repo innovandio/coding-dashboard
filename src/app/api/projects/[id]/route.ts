@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db";
 import { refreshGsdWatchers } from "@/lib/gateway-ingestor";
-import { removeAgentInstructions } from "@/lib/agent-instructions";
 
 export const dynamic = "force-dynamic";
 
@@ -76,13 +75,6 @@ export async function DELETE(
   const workspacePath = project.rows[0]?.workspace_path;
 
   await pool.query(`DELETE FROM projects WHERE id = $1`, [id]);
-
-  // Clean up injected instructions from AGENTS.md
-  if (workspacePath) {
-    removeAgentInstructions(workspacePath).catch((err) => {
-      console.warn(`[projects] Failed to remove agent instructions for ${id}:`, err);
-    });
-  }
 
   // Refresh GSD watchers to remove the deleted project's watcher
   refreshGsdWatchers();

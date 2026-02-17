@@ -3,7 +3,6 @@ import { stat } from "fs/promises";
 import { join } from "path";
 import { getEventBus, type BusEvent } from "./event-bus";
 import { parseGsdFiles, type GsdTask } from "./gsd-parser";
-import { syncAllProjectInstructions } from "./agent-instructions";
 
 interface WatcherEntry {
   projectId: string;
@@ -148,16 +147,6 @@ export async function initGsdWatchers(
     }
   }
 
-  // Sync AGENTS.md instructions for all projects (non-blocking)
-  const projectsWithNames = projects
-    .filter((p): p is { id: string; name: string; workspace_path: string } =>
-      !!p.workspace_path && !!p.name
-    );
-  if (projectsWithNames.length > 0) {
-    syncAllProjectInstructions(projectsWithNames).catch((err) => {
-      console.error("[gsd-watcher] Failed to sync agent instructions:", err);
-    });
-  }
 }
 
 export function getGsdTasks(projectId?: string): GsdTask[] {
