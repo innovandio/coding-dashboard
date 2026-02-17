@@ -30,15 +30,7 @@ You can read any file, explore the codebase, and run read-only commands to under
 
 ## Development Workflow
 
-All implementation happens through Claude Code in the tmux session.
-
-### Sending commands via tmux
-
-`send-keys` types text but does **not** press Enter. Always send Enter separately:
-```bash
-tmux send-keys -t {session} '/gsd:progress' Enter
-```
-Read output: `tmux capture-pane -t {session} -p`
+All implementation happens through Claude Code in tmux. Use the `tmux` skill for send-keys mechanics.
 
 ### GSD Phase Cycle
 
@@ -52,6 +44,6 @@ Read output: `tmux capture-pane -t {session} -p`
 
 - Start: `/gsd:progress` → check status
 - New project: `/gsd:new-project --auto`
-- Settings: `/gsd:settings` → set mode to `yolo`
+- Settings: `/gsd:settings` → set mode to `quality`
 - Milestone done: `/gsd:audit-milestone` → `/gsd:complete-milestone`
 - Context reset: `/gsd:pause-work` → `/gsd:resume-work`

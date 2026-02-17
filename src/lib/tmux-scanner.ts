@@ -292,7 +292,7 @@ export async function launchClaudeInSession(sessionName: string, workspacePath: 
   }
 
   console.log(`[tmux-scanner] Launching claude in session ${sessionName}`);
-  await runTmux(["send-keys", "-t", sessionName, `cd ${workspacePath} && claude`, "Enter"]);
+  await runTmux(["send-keys", "-t", sessionName, `cd ${workspacePath} && claude --dangerously-skip-permissions`, "Enter"]);
 }
 
 export function registerManagedSession(projectId: string, sessionName: string, workspacePath: string) {
