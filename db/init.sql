@@ -22,15 +22,3 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS sessions_project_id_idx ON sessions(project_id);
 CREATE INDEX IF NOT EXISTS sessions_session_key_idx ON sessions(session_key);
 
--- GSD Tasks (per project)
-CREATE TABLE IF NOT EXISTS gsd_tasks (
-  id text PRIMARY KEY,
-  project_id text REFERENCES projects(id),
-  title text NOT NULL,
-  status text NOT NULL,
-  wave int,
-  file_path text,
-  meta jsonb NOT NULL DEFAULT '{}'::jsonb,
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS gsd_tasks_project_status_idx ON gsd_tasks(project_id, status);

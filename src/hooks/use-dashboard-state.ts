@@ -134,22 +134,9 @@ export function useDashboardState() {
     }
   }, [selectedProjectId]);
 
-  // Initial load + one-time refresh if empty
+  // Fetch tasks when project changes
   useEffect(() => {
-    let refreshed = false;
-    const initialLoad = async () => {
-      const data = await fetchGsdTasks();
-      if (!refreshed && selectedProjectId && data.length === 0) {
-        refreshed = true;
-        await fetch("/api/gsd/refresh", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ project_id: selectedProjectId }),
-        });
-        await fetchGsdTasks();
-      }
-    };
-    initialLoad();
+    fetchGsdTasks();
   }, [selectedProjectId, fetchGsdTasks]);
 
   // Re-fetch when SSE gsd_update event arrives

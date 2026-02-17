@@ -8,6 +8,7 @@ import {
   registerManagedSession,
   tmuxSessionName,
 } from "@/lib/tmux-scanner";
+import { syncAgentInstructions } from "@/lib/agent-instructions";
 
 export const dynamic = "force-dynamic";
 
@@ -113,6 +114,18 @@ export async function POST(req: NextRequest) {
       `UPDATE projects SET meta = COALESCE(meta, '{}'::jsonb) || $1::jsonb WHERE id = $2`,
       [JSON.stringify({ tmux_session: tmuxName }), projectId]
     );
+
+    // Update AGENTS.md with tmux session info
+    if (workspacePath) {
+      syncAgentInstructions({
+        projectId,
+        projectName,
+        workspacePath,
+        tmuxSession: tmuxName,
+      }).catch((err) => {
+        console.warn("[chat.session] Failed to sync agent instructions:", err);
+      });
+    }
   } catch (err) {
     console.warn("[chat.session] Failed to set up tmux session:", err);
   }

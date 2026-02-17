@@ -205,7 +205,7 @@ export async function refreshGsdWatchers() {
   try {
     const pool = getPool();
     const result = await pool.query(
-      `SELECT id, workspace_path FROM projects WHERE workspace_path IS NOT NULL`
+      `SELECT id, name, workspace_path FROM projects WHERE workspace_path IS NOT NULL`
     );
     await initGsdWatchers(result.rows);
   } catch (err) {

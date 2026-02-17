@@ -39,11 +39,11 @@ export function DashboardShell({
         <ResizableHandle withHandle />
         <ResizablePanel defaultSize={65} minSize={30}>
           <ResizablePanelGroup orientation="horizontal">
-            <ResizablePanel defaultSize={55} minSize={30}>
+            <ResizablePanel defaultSize={50} minSize={30}>
               <ChatPanel projectId={projectId} events={events} />
             </ResizablePanel>
             <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={45} minSize={20}>
+            <ResizablePanel defaultSize={50} minSize={20}>
               <TmuxPanel projectId={projectId} />
             </ResizablePanel>
           </ResizablePanelGroup>

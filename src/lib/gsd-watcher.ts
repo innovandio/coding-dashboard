@@ -1,9 +1,9 @@
 import { watch, type FSWatcher } from "fs";
 import { stat } from "fs/promises";
 import { join } from "path";
-import { getPool } from "./db";
 import { getEventBus, type BusEvent } from "./event-bus";
-import { parseGsdFiles } from "./gsd-parser";
+import { parseGsdFiles, type GsdTask } from "./gsd-parser";
+import { syncAllProjectInstructions } from "./agent-instructions";
 
 interface WatcherEntry {
   projectId: string;
@@ -14,6 +14,7 @@ interface WatcherEntry {
 
 interface GsdWatcherState {
   entries: Map<string, WatcherEntry>;
+  taskCache: Map<string, GsdTask[]>;
 }
 
 const globalForWatcher = globalThis as unknown as {
@@ -22,42 +23,22 @@ const globalForWatcher = globalThis as unknown as {
 
 function getState(): GsdWatcherState {
   if (!globalForWatcher.gsdWatcherState) {
-    globalForWatcher.gsdWatcherState = { entries: new Map() };
+    globalForWatcher.gsdWatcherState = { entries: new Map(), taskCache: new Map() };
+  }
+  // Handle HMR: old state may lack taskCache
+  if (!globalForWatcher.gsdWatcherState.taskCache) {
+    globalForWatcher.gsdWatcherState.taskCache = new Map();
   }
   return globalForWatcher.gsdWatcherState;
 }
 
 async function refreshProject(projectId: string, workspacePath: string) {
-  const pool = getPool();
   const bus = getEventBus();
+  const state = getState();
 
   try {
     const tasks = await parseGsdFiles(workspacePath, projectId);
-
-    const taskIds: string[] = [];
-    for (const task of tasks) {
-      taskIds.push(task.id);
-      await pool.query(
-        `INSERT INTO gsd_tasks (id, project_id, title, status, wave, file_path, meta, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, now())
-         ON CONFLICT (id) DO UPDATE SET
-           title = $3, status = $4, wave = $5, file_path = $6, meta = $7, updated_at = now()`,
-        [task.id, task.project_id, task.title, task.status, task.wave, task.file_path, JSON.stringify(task.meta)]
-      );
-    }
-
-    // Delete tasks that no longer exist in the files
-    if (taskIds.length > 0) {
-      await pool.query(
-        `DELETE FROM gsd_tasks WHERE project_id = $1 AND id != ALL($2)`,
-        [projectId, taskIds]
-      );
-    } else {
-      await pool.query(
-        `DELETE FROM gsd_tasks WHERE project_id = $1`,
-        [projectId]
-      );
-    }
+    state.taskCache.set(projectId, tasks);
 
     // Emit gsd_update event so SSE clients refresh immediately
     const busEvent: BusEvent = {
@@ -134,7 +115,7 @@ function stopEntry(entry: WatcherEntry) {
 }
 
 export async function initGsdWatchers(
-  projects: { id: string; workspace_path: string | null }[]
+  projects: { id: string; name?: string; workspace_path: string | null }[]
 ) {
   const state = getState();
   const activeIds = new Set<string>();
@@ -154,7 +135,7 @@ export async function initGsdWatchers(
     state.entries.set(project.id, entry);
     console.log(`[gsd-watcher] Watching project ${project.id} at ${project.workspace_path}`);
 
-    // Initial parse so DB is up to date immediately
+    // Initial parse so cache is populated immediately
     refreshProject(project.id, project.workspace_path);
   }
 
@@ -166,6 +147,28 @@ export async function initGsdWatchers(
       console.log(`[gsd-watcher] Stopped watching project ${id}`);
     }
   }
+
+  // Sync AGENTS.md instructions for all projects (non-blocking)
+  const projectsWithNames = projects
+    .filter((p): p is { id: string; name: string; workspace_path: string } =>
+      !!p.workspace_path && !!p.name
+    );
+  if (projectsWithNames.length > 0) {
+    syncAllProjectInstructions(projectsWithNames).catch((err) => {
+      console.error("[gsd-watcher] Failed to sync agent instructions:", err);
+    });
+  }
+}
+
+export function getGsdTasks(projectId?: string): GsdTask[] {
+  const state = getState();
+  if (projectId) return state.taskCache.get(projectId) ?? [];
+  return Array.from(state.taskCache.values()).flat();
+}
+
+export async function refreshProjectTasks(projectId: string, workspacePath: string): Promise<GsdTask[]> {
+  await refreshProject(projectId, workspacePath);
+  return getGsdTasks(projectId);
 }
 
 export function stopGsdWatchers() {
