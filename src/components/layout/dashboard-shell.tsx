@@ -17,11 +17,15 @@ export function DashboardShell({
   events,
   projectId,
   agentActive,
+  terminalThinking,
+  onTerminalThinkingChange,
 }: {
   gsdTasks: GsdTask[];
   events: BusEvent[];
   projectId: string | null;
   agentActive: boolean;
+  terminalThinking?: boolean;
+  onTerminalThinkingChange?: (thinking: boolean) => void;
 }) {
   return (
     <div className="flex-1 overflow-hidden">
@@ -32,7 +36,7 @@ export function DashboardShell({
               <TaskBoard tasks={gsdTasks} />
             </div>
             <div className="w-[335px] shrink-0 border-l border-border flex flex-col items-center justify-center bg-card">
-              <AiBrainSphere isActive={agentActive} size={256} />
+              <AiBrainSphere isActive={agentActive} isThinking={terminalThinking} size={256} />
             </div>
           </div>
         </ResizablePanel>
@@ -44,7 +48,7 @@ export function DashboardShell({
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize={50} minSize={20}>
-              <TmuxPanel projectId={projectId} />
+              <TmuxPanel projectId={projectId} onThinkingChange={onTerminalThinkingChange} />
             </ResizablePanel>
           </ResizablePanelGroup>
         </ResizablePanel>

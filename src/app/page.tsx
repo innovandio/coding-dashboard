@@ -23,6 +23,7 @@ export default function Home() {
 
   const { lifecycleState } = useAgentActivity(events);
   const [sphereActive, setSphereActive] = useState(false);
+  const [terminalThinking, setTerminalThinking] = useState(false);
   const prevLifecycle = useRef(lifecycleState);
 
   // Auto-sync: activate when agent starts running, deactivate when it stops
@@ -37,6 +38,9 @@ export default function Home() {
     }
   }, [lifecycleState]);
 
+  // Also activate sphere when Claude Code in terminal is thinking
+  const effectiveSphereActive = sphereActive || terminalThinking;
+
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
       <TopBar
@@ -45,7 +49,7 @@ export default function Home() {
         selectedProjectId={selectedProjectId}
         onSelectProject={setSelectedProjectId}
         onProjectAdded={fetchProjects}
-        sphereActive={sphereActive}
+        sphereActive={effectiveSphereActive}
         onSphereToggle={setSphereActive}
       />
       <SessionTabs
@@ -57,7 +61,9 @@ export default function Home() {
         gsdTasks={gsdTasks}
         events={events}
         projectId={selectedProjectId}
-        agentActive={sphereActive}
+        agentActive={effectiveSphereActive}
+        terminalThinking={terminalThinking}
+        onTerminalThinkingChange={setTerminalThinking}
       />
     </div>
   );

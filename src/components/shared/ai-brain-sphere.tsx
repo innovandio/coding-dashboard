@@ -5,12 +5,14 @@ import * as THREE from "three";
 
 interface AiBrainSphereProps {
   isActive: boolean;
+  isThinking?: boolean;
   size?: number;
 }
 
-export function AiBrainSphere({ isActive, size = 256 }: AiBrainSphereProps) {
+export function AiBrainSphere({ isActive, isThinking = false, size = 256 }: AiBrainSphereProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef(isActive);
+  const thinkingRef = useRef(isThinking);
   const internalsRef = useRef<{
     renderer: THREE.WebGLRenderer;
     frameId: number;
@@ -19,6 +21,10 @@ export function AiBrainSphere({ isActive, size = 256 }: AiBrainSphereProps) {
   useEffect(() => {
     activeRef.current = isActive;
   }, [isActive]);
+
+  useEffect(() => {
+    thinkingRef.current = isThinking;
+  }, [isThinking]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -47,6 +53,7 @@ export function AiBrainSphere({ isActive, size = 256 }: AiBrainSphereProps) {
     const origRadius = new Float32Array(PARTICLE_COUNT);
     const spherePhi = new Float32Array(PARTICLE_COUNT);
     const sphereTheta = new Float32Array(PARTICLE_COUNT);
+    const orangeGroup = new Float32Array(PARTICLE_COUNT);
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const phi = Math.acos(1 - 2 * (i + 0.5) / PARTICLE_COUNT);
@@ -77,6 +84,7 @@ export function AiBrainSphere({ isActive, size = 256 }: AiBrainSphereProps) {
       }
 
       sizes[i] = 0.6 + Math.random() * 1.0;
+      orangeGroup[i] = Math.random() < 0.5 ? 1.0 : 0.0;
     }
 
     geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
@@ -85,11 +93,13 @@ export function AiBrainSphere({ isActive, size = 256 }: AiBrainSphereProps) {
     geo.setAttribute("origRadius", new THREE.BufferAttribute(origRadius, 1));
     geo.setAttribute("sPhi", new THREE.BufferAttribute(spherePhi, 1));
     geo.setAttribute("sTheta", new THREE.BufferAttribute(sphereTheta, 1));
+    geo.setAttribute("aOrangeGroup", new THREE.BufferAttribute(orangeGroup, 1));
 
     const particleMat = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
         uActive: { value: isActive ? 1.0 : 0.0 },
+        uThinking: { value: isThinking ? 1.0 : 0.0 },
       },
       vertexShader: `
         attribute float size;
@@ -97,12 +107,16 @@ export function AiBrainSphere({ isActive, size = 256 }: AiBrainSphereProps) {
         attribute float origRadius;
         attribute float sPhi;
         attribute float sTheta;
+        attribute float aOrangeGroup;
         varying vec3 vColor;
         varying float vAlpha;
         uniform float uTime;
         uniform float uActive;
+        uniform float uThinking;
         void main() {
-          vColor = color;
+          // Blend to orange for particles in the orange group when thinking
+          vec3 orangeColor = vec3(0.85, 0.45, 0.08);
+          vColor = mix(color, orangeColor, aOrangeGroup * uThinking);
           // Same radius active & inactive — waves are the only difference
           float baseR = origRadius;
           float wave1 = sin(sPhi * 4.0 + sTheta * 3.0 + uTime * 1.8) * 0.20;
@@ -229,7 +243,7 @@ export function AiBrainSphere({ isActive, size = 256 }: AiBrainSphereProps) {
     // --- Inner Core Glow (only visible when active) ---
     const coreGeo = new THREE.SphereGeometry(0.35, 32, 32);
     const coreMat = new THREE.ShaderMaterial({
-      uniforms: { uTime: { value: 0 }, uActive: { value: isActive ? 1.0 : 0.0 } },
+      uniforms: { uTime: { value: 0 }, uActive: { value: isActive ? 1.0 : 0.0 }, uThinking: { value: isThinking ? 1.0 : 0.0 } },
       vertexShader: `
         varying vec3 vNormal;
         void main() {
@@ -240,11 +254,14 @@ export function AiBrainSphere({ isActive, size = 256 }: AiBrainSphereProps) {
       fragmentShader: `
         uniform float uTime;
         uniform float uActive;
+        uniform float uThinking;
         varying vec3 vNormal;
         void main() {
           float intensity = pow(0.65 - dot(vNormal, vec3(0, 0, 1.0)), 2.5);
           float pulse = 0.7 + 0.3 * sin(uTime * 1.2);
-          vec3 col = mix(vec3(0.04, 0.12, 0.55), vec3(0.1, 0.35, 0.75), intensity);
+          vec3 blueCol = mix(vec3(0.04, 0.12, 0.55), vec3(0.1, 0.35, 0.75), intensity);
+          vec3 orangeCol = mix(vec3(0.55, 0.25, 0.04), vec3(0.75, 0.40, 0.10), intensity);
+          vec3 col = mix(blueCol, orangeCol, uThinking * 0.5);
           gl_FragColor = vec4(col * pulse, intensity * 0.32 * pulse * uActive);
         }
       `,
@@ -258,6 +275,7 @@ export function AiBrainSphere({ isActive, size = 256 }: AiBrainSphereProps) {
     // --- Animation (delta-time rotation to avoid spin jumps on transition) ---
     const clock = new THREE.Clock();
     let activeSmooth = isActive ? 1.0 : 0.0;
+    let thinkingSmooth = isThinking ? 1.0 : 0.0;
     let rotY = 0;
     let frameId = 0;
 
@@ -269,12 +287,17 @@ export function AiBrainSphere({ isActive, size = 256 }: AiBrainSphereProps) {
       const target = activeRef.current ? 1.0 : 0.0;
       activeSmooth += (target - activeSmooth) * 0.03;
 
+      const thinkingTarget = thinkingRef.current ? 1.0 : 0.0;
+      thinkingSmooth += (thinkingTarget - thinkingSmooth) * 0.03;
+
       particleMat.uniforms.uTime.value = t;
       particleMat.uniforms.uActive.value = activeSmooth;
+      particleMat.uniforms.uThinking.value = thinkingSmooth;
       synapseMat.uniforms.uTime.value = t;
       synapseMat.uniforms.uActive.value = activeSmooth;
       coreMat.uniforms.uTime.value = t;
       coreMat.uniforms.uActive.value = activeSmooth;
+      coreMat.uniforms.uThinking.value = thinkingSmooth;
 
       // Accumulate rotation via delta — speed changes don't cause jumps
       const rotSpeed = 0.08 + activeSmooth * 0.04;

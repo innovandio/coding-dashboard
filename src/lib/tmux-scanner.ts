@@ -14,6 +14,7 @@ export interface TmuxOutputEvent {
   cursorX: number;
   cursorY: number;
   paneHeight: number;
+  thinking: boolean;
   timestamp: string;
 }
 
@@ -34,6 +35,7 @@ interface TmuxScannerState {
   activeCapture: string | null;
   lastOutput: string;
   lastCursor: string;
+  lastThinking: boolean;
   lastActivity: number;
   clientCount: number;
   managedSessions: Map<string, ManagedSession>;
@@ -54,6 +56,7 @@ function getState(): TmuxScannerState {
       activeCapture: null,
       lastOutput: "",
       lastCursor: "",
+      lastThinking: false,
       lastActivity: 0,
       clientCount: 0,
       managedSessions: new Map(),
@@ -134,7 +137,7 @@ async function pollCapture() {
   if (!state.activeCapture) return;
 
   try {
-    const [output, cursorInfo] = await Promise.all([
+    const [output, cursorInfo, paneTitle] = await Promise.all([
       runTmux([
         "capture-pane",
         "-p",
@@ -149,12 +152,24 @@ async function pollCapture() {
         "-p",
         "#{cursor_x},#{cursor_y},#{pane_height}",
       ]),
+      runTmux([
+        "display-message",
+        "-t",
+        state.activeCapture,
+        "-p",
+        "#{pane_title}",
+      ]),
     ]);
     const cursorKey = cursorInfo.trim();
     const [cx, cy, ph] = cursorKey.split(",").map(Number);
-    if (output !== state.lastOutput || cursorKey !== state.lastCursor) {
+    // Detect Claude Code thinking: pane title starts with a braille spinner (U+2800-U+28FF)
+    const titleTrimmed = paneTitle.trim();
+    const firstCodePoint = titleTrimmed.codePointAt(0) ?? 0;
+    const thinking = firstCodePoint >= 0x2800 && firstCodePoint <= 0x28FF;
+    if (output !== state.lastOutput || cursorKey !== state.lastCursor || thinking !== state.lastThinking) {
       state.lastOutput = output;
       state.lastCursor = cursorKey;
+      state.lastThinking = thinking;
       state.lastActivity = Date.now();
       const event: TmuxOutputEvent = {
         session: state.activeCapture,
@@ -162,6 +177,7 @@ async function pollCapture() {
         cursorX: cx || 0,
         cursorY: cy || 0,
         paneHeight: ph || 0,
+        thinking,
         timestamp: new Date().toISOString(),
       };
       state.emitter.emit("tmux:output", event);
@@ -171,6 +187,7 @@ async function pollCapture() {
     state.activeCapture = null;
     state.lastOutput = "";
     state.lastCursor = "";
+    state.lastThinking = false;
     stopCapturePolling();
   }
 

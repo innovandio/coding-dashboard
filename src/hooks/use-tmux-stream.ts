@@ -36,6 +36,7 @@ export function useTmuxOutput(sessionName: string | null) {
   const [output, setOutput] = useState("");
   const [cursor, setCursor] = useState<{ x: number; y: number; paneHeight: number }>({ x: 0, y: 0, paneHeight: 0 });
   const [connected, setConnected] = useState(false);
+  const [thinking, setThinking] = useState(false);
   const sessionRef = useRef(sessionName);
   sessionRef.current = sessionName;
 
@@ -44,6 +45,7 @@ export function useTmuxOutput(sessionName: string | null) {
       setOutput("");
       setCursor({ x: 0, y: 0, paneHeight: 0 });
       setConnected(false);
+      setThinking(false);
       return;
     }
 
@@ -59,6 +61,7 @@ export function useTmuxOutput(sessionName: string | null) {
         const ev: TmuxOutputEvent = JSON.parse(e.data);
         setOutput(ev.output);
         setCursor({ x: ev.cursorX, y: ev.cursorY, paneHeight: ev.paneHeight });
+        setThinking(ev.thinking);
       } catch {
         // ignore parse errors
       }
@@ -67,8 +70,9 @@ export function useTmuxOutput(sessionName: string | null) {
     return () => {
       es.close();
       setConnected(false);
+      setThinking(false);
     };
   }, [sessionName]);
 
-  return { output, cursor, connected };
+  return { output, cursor, connected, thinking };
 }
