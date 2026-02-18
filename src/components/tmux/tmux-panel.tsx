@@ -72,16 +72,27 @@ function sendResize(session: string, cols: number, rows: number) {
   }).catch(() => {});
 }
 
-function getPingBackSettings(projectId: string): { enabled: boolean; message: string } {
+async function fetchPingBackSettings(projectId: string): Promise<{ enabled: boolean; message: string }> {
   try {
-    const raw = localStorage.getItem(`pingback:${projectId}`);
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
-  return { enabled: false, message: DEFAULT_PING_MESSAGE };
+    const res = await fetch(`/api/projects/${projectId}`);
+    if (!res.ok) return { enabled: false, message: DEFAULT_PING_MESSAGE };
+    const project = await res.json();
+    const meta = project.meta ?? {};
+    return {
+      enabled: meta.pingback_enabled ?? false,
+      message: meta.pingback_message ?? DEFAULT_PING_MESSAGE,
+    };
+  } catch {
+    return { enabled: false, message: DEFAULT_PING_MESSAGE };
+  }
 }
 
 function savePingBackSettings(projectId: string, settings: { enabled: boolean; message: string }) {
-  localStorage.setItem(`pingback:${projectId}`, JSON.stringify(settings));
+  fetch(`/api/projects/${projectId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ meta: { pingback_enabled: settings.enabled, pingback_message: settings.message } }),
+  }).catch(() => {});
 }
 
 const MEASURE_CHARS = 50;
@@ -133,13 +144,17 @@ export function TmuxPanel({ projectId, onThinkingChange }: { projectId: string |
   const [pingBackMessage, setPingBackMessage] = useState(DEFAULT_PING_MESSAGE);
   const [draftMessage, setDraftMessage] = useState(DEFAULT_PING_MESSAGE);
 
-  // Load settings when project changes
+  // Load settings from database when project changes
   useEffect(() => {
     if (!projectId) return;
-    const settings = getPingBackSettings(projectId);
-    setPingBackEnabled(settings.enabled);
-    setPingBackMessage(settings.message);
-    setDraftMessage(settings.message);
+    let cancelled = false;
+    fetchPingBackSettings(projectId).then((settings) => {
+      if (cancelled) return;
+      setPingBackEnabled(settings.enabled);
+      setPingBackMessage(settings.message);
+      setDraftMessage(settings.message);
+    });
+    return () => { cancelled = true; };
   }, [projectId]);
 
   // Detect thinking→idle transition for ping-back

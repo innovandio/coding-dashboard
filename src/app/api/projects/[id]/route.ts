@@ -38,7 +38,7 @@ export async function PATCH(
     vals.push(body.workspace_path);
   }
   if (body.meta !== undefined) {
-    sets.push(`meta = $${idx++}`);
+    sets.push(`meta = COALESCE(meta, '{}'::jsonb) || $${idx++}::jsonb`);
     vals.push(JSON.stringify(body.meta));
   }
 
