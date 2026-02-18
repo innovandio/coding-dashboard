@@ -32,3 +32,7 @@ if ! command -v tmux &>/dev/null; then
 fi
 
 echo "tmux is available: $(tmux -V)"
+
+# Start Docker services
+echo "Starting Docker services..."
+docker compose up -d

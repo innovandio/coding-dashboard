@@ -30,7 +30,14 @@ You can read any file, explore the codebase, and run read-only commands to under
 
 ## Development Workflow
 
-All implementation happens through Claude Code in tmux. Use the `tmux` skill for send-keys mechanics.
+Claude Code is normally already running in tmux session `dash-{{projectId}}`. All commands go there.
+
+If the session is empty (no Claude Code running), start it:
+```bash
+tmux send-keys -t dash-{{projectId}} 'claude --dangerously-skip-permissions' Enter
+```
+
+Use the `tmux` skill for send-keys mechanics.
 
 ### GSD Phase Cycle
 

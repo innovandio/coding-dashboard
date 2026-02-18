@@ -49,8 +49,6 @@ export default function Home() {
         selectedProjectId={selectedProjectId}
         onSelectProject={setSelectedProjectId}
         onProjectAdded={fetchProjects}
-        sphereActive={effectiveSphereActive}
-        onSphereToggle={setSphereActive}
       />
       <SessionTabs
         sessions={sessions}
@@ -64,6 +62,7 @@ export default function Home() {
         agentActive={effectiveSphereActive}
         terminalThinking={terminalThinking}
         onTerminalThinkingChange={setTerminalThinking}
+        onSphereToggle={setSphereActive}
       />
     </div>
   );

@@ -2,9 +2,10 @@
   "name": "coding-dashboard-setup",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.27.0",
   "scripts": {
     "check-tmux": "./scripts/check-tmux.sh",
-    "predev": "npm run check-tmux",
+    "predev": "pnpm run check-tmux",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -27,6 +28,12 @@
     "tailwind-merge": "^3.4.0",
     "three": "^0.182.0",
     "ws": "^8.19.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "sharp",
+      "unrs-resolver"
+    ]
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
