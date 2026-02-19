@@ -28,6 +28,7 @@ export interface HealthState {
   connectedSince: number | null;
   reconnectAttempts: number;
   agentIds: string[];
+  needsSetup: boolean;
 }
 
 export interface GsdTask {
@@ -47,6 +48,7 @@ const defaultHealth: HealthState = {
   connectedSince: null,
   reconnectAttempts: 0,
   agentIds: [],
+  needsSetup: false,
 };
 
 const defaultTasks: GsdTask[] = [];

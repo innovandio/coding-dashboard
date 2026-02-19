@@ -69,12 +69,15 @@ function loadOrCreateDeviceIdentity(): DeviceIdentity {
   return { deviceId, publicKeyPem, privateKeyPem };
 }
 
-function buildDeviceConnect(identity: DeviceIdentity, scopes: string[], token: string) {
+function buildDeviceConnect(identity: DeviceIdentity, scopes: string[], token: string, nonce?: string) {
   const signedAt = Date.now();
-  const payload = [
-    "v1", identity.deviceId, "gateway-client", "backend", "operator",
+  const version = nonce ? "v2" : "v1";
+  const parts = [
+    version, identity.deviceId, "gateway-client", "backend", "operator",
     scopes.join(","), String(signedAt), token,
-  ].join("|");
+  ];
+  if (version === "v2") parts.push(nonce ?? "");
+  const payload = parts.join("|");
 
   const privateKey = crypto.createPrivateKey(identity.privateKeyPem);
   const sig = crypto.sign(null, Buffer.from(payload, "utf8"), privateKey);
@@ -84,6 +87,7 @@ function buildDeviceConnect(identity: DeviceIdentity, scopes: string[], token: s
     publicKey: base64UrlEncode(derivePublicKeyRaw(identity.publicKeyPem)),
     signature: base64UrlEncode(sig),
     signedAt,
+    ...(nonce ? { nonce } : {}),
   };
 }
 
@@ -102,6 +106,8 @@ interface IngestorState {
   ws: WebSocket | null;
   seq: number;
   pendingRequests: Map<string, PendingRequest>;
+  needsSetup: boolean;
+  needsSetupCheckedAt: number;
 }
 
 // Cache: sessionKey -> { projectId, sessionId, agentId }
@@ -109,6 +115,32 @@ const sessionKeyCache = new Map<
   string,
   { projectId: string; sessionId: string; agentId: string }
 >();
+
+// --- needsSetup detection ---
+
+/**
+ * Check the host filesystem for openclaw.json.
+ * The ~/.openclaw dir is bind-mounted into the container, so we can check
+ * directly without docker exec (which fails when the container is crash-looping).
+ * Result is cached for 5s.
+ */
+function checkNeedsSetup(state: IngestorState): void {
+  if (Date.now() - state.needsSetupCheckedAt < 5000) return;
+
+  const home = process.env.HOME ?? "/root";
+  const configPath = path.join(home, ".openclaw", "openclaw.json");
+  state.needsSetup = !fs.existsSync(configPath);
+  state.needsSetupCheckedAt = Date.now();
+}
+
+/** Called from setup-process.ts after successful setup to bust the cache. */
+export function invalidateNeedsSetupCache(): void {
+  const s = globalForIngestor.ingestorState;
+  if (s) {
+    s.needsSetupCheckedAt = 0;
+    s.needsSetup = false;
+  }
+}
 
 function shouldEmit(eventType: string, payload: Record<string, unknown>): boolean {
   if (eventType === "tick") return false;
@@ -133,9 +165,13 @@ export function getIngestorState(): {
   connectedSince: number | null;
   reconnectAttempts: number;
   agentIds: string[];
+  needsSetup: boolean;
 } {
   const s = globalForIngestor.ingestorState;
   if (!s) {
+    // No ingestor yet — do a quick fs check so the UI still detects needsSetup
+    const home = process.env.HOME ?? "/root";
+    const configPath = path.join(home, ".openclaw", "openclaw.json");
     return {
       connectionState: "disconnected",
       lastTickAt: null,
@@ -143,12 +179,23 @@ export function getIngestorState(): {
       connectedSince: null,
       reconnectAttempts: 0,
       agentIds: [],
+      needsSetup: !fs.existsSync(configPath),
     };
   }
+
+  // Backfill fields for state objects created before HMR reload
+  if (s.needsSetupCheckedAt === undefined) {
+    s.needsSetupCheckedAt = 0;
+    s.needsSetup = false;
+  }
+
   // Lazily fetch agents if connected but list is empty
   if (s.connectionState === "connected" && s.agentIds.size === 0) {
     refreshAgentIds(s);
   }
+
+  // Lazily check needsSetup (cached for 5s)
+  checkNeedsSetup(s);
 
   return {
     connectionState: s.connectionState,
@@ -157,6 +204,7 @@ export function getIngestorState(): {
     connectedSince: s.connectedSince,
     reconnectAttempts: s.reconnectAttempts,
     agentIds: Array.from(s.agentIds),
+    needsSetup: s.needsSetup,
   };
 }
 
@@ -226,6 +274,8 @@ export function startIngestor() {
     ws: null,
     seq: 0,
     pendingRequests: new Map(),
+    needsSetup: false,
+    needsSetupCheckedAt: 0,
   };
   globalForIngestor.ingestorState = state;
 
@@ -274,6 +324,8 @@ export function startIngestor() {
 
       // Handle challenge-response auth flow
       if (msg.type === "event" && msg.event === "connect.challenge") {
+        const challengePayload = msg.payload as Record<string, unknown> | undefined;
+        const nonce = typeof challengePayload?.nonce === "string" ? challengePayload.nonce : undefined;
         sendReq("connect", {
           minProtocol: 3,
           maxProtocol: 3,
@@ -286,7 +338,7 @@ export function startIngestor() {
             mode: "backend",
           },
           auth: { token: gatewayToken },
-          device: buildDeviceConnect(deviceIdentity, connectScopes, gatewayToken!),
+          device: buildDeviceConnect(deviceIdentity, connectScopes, gatewayToken!, nonce),
         });
         return;
       }
@@ -368,6 +420,25 @@ export function startIngestor() {
         // Tick: update in-memory timestamp and skip everything else
         if (eventName === "tick") {
           state.lastTickAt = Date.now();
+          return;
+        }
+
+        // PTY events: resolve backendId → projectId, then forward to pty-emitter
+        if (eventName.startsWith("pty.")) {
+          const { getPtyEmitter } = await import("./pty-emitter");
+          const backendId = payload.backendId as string | undefined;
+          let projectId: string | undefined;
+          if (backendId) {
+            // backendId in OpenClaw maps to agent_id in our DB
+            try {
+              const result = await pool.query(
+                `SELECT id FROM projects WHERE agent_id = $1 LIMIT 1`,
+                [backendId]
+              );
+              projectId = result.rows[0]?.id;
+            } catch { /* best effort */ }
+          }
+          getPtyEmitter().emit(eventName, { ...payload, projectId });
           return;
         }
 
@@ -518,6 +589,12 @@ export function startIngestor() {
     console.log(
       `[ingestor] Reconnecting in ${delay}ms (attempt ${state.reconnectAttempts})`
     );
+
+    // After repeated failures, check if the gateway needs setup
+    if (state.reconnectAttempts > 2) {
+      checkNeedsSetup(state);
+    }
+
     setTimeout(connect, delay);
   }
 

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { TopBar } from "@/components/layout/top-bar";
 import { SessionTabs } from "@/components/layout/session-tabs";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { SetupDialog } from "@/components/setup/setup-dialog";
 import { useDashboardState } from "@/hooks/use-dashboard-state";
 import { useAgentActivity } from "@/components/activity/use-agent-activity";
 
@@ -24,7 +25,20 @@ export default function Home() {
   const { lifecycleState } = useAgentActivity(events);
   const [sphereActive, setSphereActive] = useState(false);
   const [terminalThinking, setTerminalThinking] = useState(false);
+  // Latch: once the setup dialog opens, keep it open until the process exits.
+  // health.needsSetup may flip to false mid-wizard (config written early).
+  const [setupOpen, setSetupOpen] = useState(false);
   const prevLifecycle = useRef(lifecycleState);
+
+  useEffect(() => {
+    if (health.needsSetup && !setupOpen) {
+      setSetupOpen(true);
+    }
+  }, [health.needsSetup, setupOpen]);
+
+  const handleSetupComplete = useCallback(() => {
+    setSetupOpen(false);
+  }, []);
 
   // Auto-sync: activate when agent starts running, deactivate when it stops
   useEffect(() => {
@@ -43,6 +57,10 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
+      <SetupDialog
+        open={setupOpen}
+        onSetupComplete={handleSetupComplete}
+      />
       <TopBar
         health={health}
         projects={projects}
