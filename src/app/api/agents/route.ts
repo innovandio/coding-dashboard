@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { cp } from "fs/promises";
-import path from "path";
+import { agentDir } from "@/lib/agent-scaffold";
 
 const execFileAsync = promisify(execFile);
 
@@ -36,13 +36,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Create the agent via CLI
+    // Create the agent via CLI, storing agent state inside the workspace
     await execFileAsync("openclaw", [
       "agents",
       "add",
       agentId,
       "--workspace",
       workspace,
+      "--agent-dir",
+      agentDir(workspace),
       "--non-interactive",
     ]);
 
@@ -62,16 +64,11 @@ export async function POST(req: NextRequest) {
       const target = agents.find((a) => a.id === agentId);
 
       if (source && target) {
-        // Copy agent config files
+        // Copy agent files (identity, soul, etc.) — agentDir is inside the workspace
         await cp(source.agentDir, target.agentDir, {
           recursive: true,
           force: true,
         });
-
-        // Copy IDENTITY.md if source workspace has one
-        const sourceIdentity = path.join(source.workspace, "IDENTITY.md");
-        const targetIdentity = path.join(workspace, "IDENTITY.md");
-        await cp(sourceIdentity, targetIdentity).catch(() => {});
       }
     }
 

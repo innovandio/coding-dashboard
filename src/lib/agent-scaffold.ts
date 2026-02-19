@@ -1,7 +1,10 @@
-import { readdir, readFile, writeFile, access } from "fs/promises";
+import { readdir, readFile, writeFile, mkdir, access } from "fs/promises";
 import { join } from "path";
 
 const TEMPLATES_DIR = join(process.cwd(), "agent-templates");
+
+/** Subdirectory inside workspace where agent MD files live */
+export const AGENT_FILES_REL = ".openclaw/agents/project-manager";
 
 interface ScaffoldContext {
   projectId: string;
@@ -9,17 +12,25 @@ interface ScaffoldContext {
   workspacePath: string;
 }
 
+/** Resolve the agent files directory for a given workspace */
+export function agentDir(workspacePath: string): string {
+  return join(workspacePath, AGENT_FILES_REL);
+}
+
 /**
  * Copy agent template MD files into a workspace, skipping files that already exist.
  * Replaces {{projectName}} and {{projectId}} placeholders.
  */
 export async function scaffoldAgentFiles(ctx: ScaffoldContext): Promise<void> {
+  const destDir = agentDir(ctx.workspacePath);
+  await mkdir(destDir, { recursive: true });
+
   const files = await readdir(TEMPLATES_DIR);
 
   for (const file of files) {
     if (!file.endsWith(".md")) continue;
 
-    const dest = join(ctx.workspacePath, file);
+    const dest = join(destDir, file);
 
     // Don't overwrite existing files — the agent may have customized them
     try {
@@ -36,5 +47,5 @@ export async function scaffoldAgentFiles(ctx: ScaffoldContext): Promise<void> {
     await writeFile(dest, content, "utf-8");
   }
 
-  console.log(`[agent-scaffold] Scaffolded agent files for ${ctx.projectId} in ${ctx.workspacePath}`);
+  console.log(`[agent-scaffold] Scaffolded agent files for ${ctx.projectId} in ${destDir}`);
 }

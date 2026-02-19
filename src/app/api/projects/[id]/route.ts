@@ -67,7 +67,7 @@ export async function DELETE(
   const { id } = await params;
   const pool = getPool();
 
-  // Get workspace_path before deleting so we can clean up AGENTS.md
+  // Get workspace_path before deleting so we can clean up agent files
   const project = await pool.query(
     `SELECT workspace_path FROM projects WHERE id = $1`,
     [id]
