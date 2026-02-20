@@ -26,9 +26,8 @@ export function SetupDialog({
   const fitAddonRef = useRef<import("@xterm/addon-fit").FitAddon | null>(null);
   const [termReady, setTermReady] = useState(false);
 
-  const { setTerminal, sendInput, setupState, exitCode } = useSetupStream(
-    open && termReady,
-  );
+  const { setTerminal, sendInput, setupState, exitCode, dashboardOpened } =
+    useSetupStream(open && termReady);
 
   // Initialize xterm.js when the container element appears
   useEffect(() => {
@@ -95,25 +94,31 @@ export function SetupDialog({
     return () => observer.disconnect();
   }, [open, containerEl, termReady]);
 
-  // Auto-close 2s after successful exit
+  // Auto-close 2s after the dashboard URL has been opened (post-restart),
+  // or 30s after successful exit as a fallback.
   useEffect(() => {
     if (setupState === "exited" && exitCode === 0) {
-      const timer = setTimeout(onSetupComplete, 2000);
+      const delay = dashboardOpened ? 2000 : 30000;
+      const timer = setTimeout(onSetupComplete, delay);
       return () => clearTimeout(timer);
     }
-  }, [setupState, exitCode, onSetupComplete]);
+  }, [setupState, exitCode, dashboardOpened, onSetupComplete]);
 
   const statusBadge =
     setupState === "running" ? (
       <Badge variant="outline" className="text-[10px]">
         Running
       </Badge>
-    ) : setupState === "exited" && exitCode === 0 ? (
+    ) : setupState === "exited" && exitCode === 0 && dashboardOpened ? (
       <Badge
         variant="secondary"
         className="text-[10px] bg-green-900/40 text-green-400"
       >
         Complete
+      </Badge>
+    ) : setupState === "exited" && exitCode === 0 ? (
+      <Badge variant="outline" className="text-[10px] animate-pulse">
+        Restarting gateway...
       </Badge>
     ) : setupState === "exited" ? (
       <Badge variant="destructive" className="text-[10px]">

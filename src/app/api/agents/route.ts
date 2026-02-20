@@ -3,20 +3,17 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { cp } from "fs/promises";
 import { agentDir } from "@/lib/agent-scaffold";
+import { sendGatewayRequest } from "@/lib/gateway-ingestor";
 
 const execFileAsync = promisify(execFile);
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/agents — list OpenClaw agents */
+/** GET /api/agents — list OpenClaw agents via gateway API */
 export async function GET() {
   try {
-    const { stdout } = await execFileAsync("openclaw", [
-      "agents",
-      "list",
-      "--json",
-    ]);
-    const agents = JSON.parse(stdout);
+    const payload = await sendGatewayRequest("agents.list");
+    const agents = (payload as { agents?: unknown[] }).agents ?? [];
     return NextResponse.json(agents);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
@@ -36,26 +33,49 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Create the agent via CLI, storing agent state inside the workspace
-    await execFileAsync("openclaw", [
-      "agents",
-      "add",
-      agentId,
-      "--workspace",
-      workspace,
-      "--agent-dir",
-      agentDir(workspace),
-      "--non-interactive",
-    ]);
+    // Create the agent via docker compose run with the workspace bind-mounted.
+    // We use `run --rm` instead of `exec` because the running container only
+    // mounts ~/.openclaw and /data/agents — the host workspace path isn't
+    // available inside it. Mount it at /projects/<agentId> for file access.
+    const containerProjectDir = `/projects/${agentId}`;
+    const agentDirPath = agentDir(agentId);
+    const runArgs = [
+      "compose", "run", "--rm", "-T",
+      "-v", `${workspace}:${containerProjectDir}`,
+      "openclaw-gateway",
+    ];
+    try {
+      await execFileAsync("docker", [
+        ...runArgs,
+        "node", "openclaw.mjs", "agents", "add", agentId,
+        "--workspace", agentDirPath,
+        "--agent-dir", agentDirPath,
+        "--non-interactive",
+      ]);
+    } catch (addErr) {
+      const msg = addErr instanceof Error ? addErr.message : "";
+      if (msg.includes("already exists")) {
+        // Delete stale agent and re-add with the correct paths
+        await execFileAsync("docker", [
+          ...runArgs,
+          "node", "openclaw.mjs", "agents", "delete", agentId, "--force",
+        ]);
+        await execFileAsync("docker", [
+          ...runArgs,
+          "node", "openclaw.mjs", "agents", "add", agentId,
+          "--workspace", agentDirPath,
+          "--agent-dir", agentDirPath,
+          "--non-interactive",
+        ]);
+      } else {
+        throw addErr;
+      }
+    }
 
     // If based on an existing agent, copy its agent-dir contents
     if (basedOn) {
-      const { stdout } = await execFileAsync("openclaw", [
-        "agents",
-        "list",
-        "--json",
-      ]);
-      const agents = JSON.parse(stdout) as Array<{
+      const payload = await sendGatewayRequest("agents.list");
+      const agents = ((payload as { agents?: unknown[] }).agents ?? []) as Array<{
         id: string;
         agentDir: string;
         workspace: string;
@@ -64,7 +84,6 @@ export async function POST(req: NextRequest) {
       const target = agents.find((a) => a.id === agentId);
 
       if (source && target) {
-        // Copy agent files (identity, soul, etc.) — agentDir is inside the workspace
         await cp(source.agentDir, target.agentDir, {
           recursive: true,
           force: true,

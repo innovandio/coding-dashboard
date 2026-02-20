@@ -17,6 +17,7 @@ export function useSetupStream(enabled: boolean) {
   const [connected, setConnected] = useState(false);
   const [setupState, setSetupState] = useState<SetupStreamState>("idle");
   const [exitCode, setExitCode] = useState<number | null>(null);
+  const [dashboardOpened, setDashboardOpened] = useState(false);
 
   const setTerminal = useCallback((term: Terminal | null) => {
     termRef.current = term;
@@ -35,6 +36,7 @@ export function useSetupStream(enabled: boolean) {
       setConnected(false);
       setSetupState("idle");
       setExitCode(null);
+      setDashboardOpened(false);
       return;
     }
 
@@ -76,11 +78,30 @@ export function useSetupStream(enabled: boolean) {
       } catch { /* ignore */ }
     });
 
+    es.addEventListener("openUrl", (e) => {
+      try {
+        const payload = JSON.parse((e as MessageEvent).data);
+        if (payload.url) {
+          window.open(payload.url, "_blank");
+          setDashboardOpened(true);
+        }
+      } catch { /* ignore */ }
+    });
+
+    es.addEventListener("deviceApproved", (e) => {
+      try {
+        const payload = JSON.parse((e as MessageEvent).data);
+        termRef.current?.write(
+          `\r\n\x1b[32m[Device ${payload.requestId} approved]\x1b[0m\r\n`,
+        );
+      } catch { /* ignore */ }
+    });
+
     return () => {
       es.close();
       setConnected(false);
     };
   }, [enabled]);
 
-  return { setTerminal, sendInput, connected, setupState, exitCode };
+  return { setTerminal, sendInput, connected, setupState, exitCode, dashboardOpened };
 }

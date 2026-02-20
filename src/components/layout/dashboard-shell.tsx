@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/resizable";
 import { TaskBoard } from "@/components/gsd/task-board";
 import { ChatPanel } from "@/components/chat/chat-panel";
-import { TmuxPanel } from "@/components/tmux/tmux-panel";
+import { PtyPanel } from "@/components/terminal/pty-panel";
 import { AiBrainSphere } from "@/components/shared/ai-brain-sphere";
 import type { GsdTask } from "@/hooks/use-dashboard-state";
 import type { BusEvent } from "@/lib/event-bus";
@@ -72,7 +72,7 @@ export function DashboardShell({
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize={50} minSize={20}>
-              <TmuxPanel projectId={projectId} onThinkingChange={onTerminalThinkingChange} />
+              <PtyPanel projectId={projectId} onThinkingChange={onTerminalThinkingChange} />
             </ResizablePanel>
           </ResizablePanelGroup>
         </ResizablePanel>

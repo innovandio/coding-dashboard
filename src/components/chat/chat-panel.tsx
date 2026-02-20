@@ -18,6 +18,17 @@ interface ContentBlock {
   thinking?: string;
 }
 
+/** Strip gateway metadata wrapper from user messages. */
+function stripGatewayWrapper(str: string): string {
+  const match = str.match(/^Conversation info\b.*?\]\s*/s);
+  return match ? str.slice(match[0].length) : str;
+}
+
+/** Strip routing tags like [[reply_to_current]] from assistant messages. */
+function stripRoutingTags(str: string): string {
+  return str.replace(/^\[\[[^\]]+\]\]\s*/g, "");
+}
+
 function extractContent(raw: unknown): { thinking: string; text: string } {
   if (typeof raw === "string") return { thinking: "", text: raw };
   if (Array.isArray(raw)) {
@@ -185,7 +196,8 @@ export function ChatPanel({
       if (ev.event_type === "chat") {
         const role = payload.role as string | undefined;
         if (role === "user") {
-          const { text } = extractContent(payload.content);
+          const { text: rawText } = extractContent(payload.content);
+          const text = stripGatewayWrapper(rawText);
           const ts = ev.created_at ? new Date(ev.created_at).getTime() : 0;
           orderedItems.push({
             eventId: numericId,
@@ -207,12 +219,12 @@ export function ChatPanel({
           const run = getOrCreateRun(runId, numericId);
           if (state === "delta") {
             const { thinking, text } = extractContent(msgPayload.content);
-            run.chatText = text;
+            run.chatText = stripRoutingTags(text);
             run.chatThinking = thinking;
           } else if (state === "final") {
             const { thinking, text } = extractContent(msgPayload.content);
             run.chatThinking = thinking || run.chatThinking;
-            run.chatText = text || run.chatText;
+            run.chatText = stripRoutingTags(text) || run.chatText;
             run.isFinal = true;
           } else if (state === "error") {
             const { text } = extractContent(msgPayload.content);
@@ -232,7 +244,8 @@ export function ChatPanel({
         const run = getOrCreateRun(runId, numericId);
 
         if (stream === "assistant") {
-          const text = (data.text as string) ?? (data.delta as string) ?? "";
+          const raw = (data.text as string) ?? (data.delta as string) ?? "";
+          const text = stripRoutingTags(raw);
           if (text && text !== "HEARTBEAT_OK") {
             run.agentText = text;
           }

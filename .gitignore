@@ -33,9 +33,13 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# docker compose override (auto-generated per-project workspace mounts)
+docker-compose.override.yml
+
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+/.playwright-mcp/

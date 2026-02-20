@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { homedir } from "os";
 import { getPool } from "@/lib/db";
 import { refreshGsdWatchers } from "@/lib/gateway-ingestor";
+import { syncGatewayMounts } from "@/lib/agent-scaffold";
+
+function expandTilde(p: string): string {
+  if (p.startsWith("~/")) return homedir() + p.slice(1);
+  if (p === "~") return homedir();
+  return p;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +43,7 @@ export async function PATCH(
   }
   if (body.workspace_path !== undefined) {
     sets.push(`workspace_path = $${idx++}`);
-    vals.push(body.workspace_path);
+    vals.push(expandTilde(body.workspace_path));
   }
   if (body.meta !== undefined) {
     sets.push(`meta = COALESCE(meta, '{}'::jsonb) || $${idx++}::jsonb`);
@@ -55,6 +63,9 @@ export async function PATCH(
   // Refresh watchers if workspace_path changed
   if (body.workspace_path !== undefined) {
     refreshGsdWatchers();
+    syncGatewayMounts().catch((err) =>
+      console.warn("[projects] Failed to sync gateway mounts:", err)
+    );
   }
 
   return NextResponse.json({ ok: true });
@@ -67,17 +78,13 @@ export async function DELETE(
   const { id } = await params;
   const pool = getPool();
 
-  // Get workspace_path before deleting so we can clean up agent files
-  const project = await pool.query(
-    `SELECT workspace_path FROM projects WHERE id = $1`,
-    [id]
-  );
-  const workspacePath = project.rows[0]?.workspace_path;
-
   await pool.query(`DELETE FROM projects WHERE id = $1`, [id]);
 
   // Refresh GSD watchers to remove the deleted project's watcher
   refreshGsdWatchers();
+  syncGatewayMounts().catch((err) =>
+    console.warn("[projects] Failed to sync gateway mounts:", err)
+  );
 
   return NextResponse.json({ ok: true });
 }

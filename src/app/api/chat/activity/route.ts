@@ -74,6 +74,22 @@ function stripAnsi(str: string): string {
 }
 
 /**
+ * Strip gateway metadata wrapper from user messages.
+ * The gateway prepends: "Conversation info (untrusted metadata): ```json {...} ``` [timestamp] "
+ */
+function stripGatewayWrapper(str: string): string {
+  // Match: everything up to and including a bracketed timestamp like [Fri 2026-02-20 08:48 UTC]
+  const match = str.match(/^Conversation info\b.*?\]\s*/s);
+  if (match) return str.slice(match[0].length);
+  return str;
+}
+
+/** Strip routing tags like [[reply_to_current]] from assistant messages. */
+function stripRoutingTags(str: string): string {
+  return str.replace(/^\[\[[^\]]+\]\]\s*/g, "");
+}
+
+/**
  * Parses Gateway chat history into structured ConversationTurn[].
  * Each user message becomes a user turn; each assistant message becomes
  * an assistant turn with optional thinking, tool calls, and text.
@@ -104,8 +120,8 @@ export async function GET(req: NextRequest) {
                 .filter((b) => b.type === "text")
                 .map((b) => b.text ?? "")
                 .join("");
-        // Gateway user messages may include system context with ANSI codes
-        const text = stripAnsi(raw);
+        // Gateway user messages include metadata wrapper and may have ANSI codes
+        const text = stripGatewayWrapper(stripAnsi(raw));
         turns.push({ role: "user", text });
       } else if (msg.role === "assistant" && Array.isArray(msg.content)) {
         const thinkingParts: string[] = [];
@@ -134,7 +150,7 @@ export async function GET(req: NextRequest) {
           }
         }
 
-        const text = textParts.join("");
+        const text = stripRoutingTags(textParts.join(""));
         const thinking = thinkingParts.join("\n");
 
         // Handle error responses (e.g. 429 rate limit, overloaded, etc.)

@@ -6,8 +6,13 @@
  * All output is buffered so late-connecting SSE clients can replay it.
  */
 import { EventEmitter } from "events";
-import { spawn, type ChildProcess } from "child_process";
+import { spawn, type ChildProcess, execFile } from "child_process";
+import { promisify } from "util";
+import fs from "fs";
+import path from "path";
 import { invalidateNeedsSetupCache } from "./gateway-ingestor";
+
+const execFileAsync = promisify(execFile);
 
 export type SetupState = "idle" | "running" | "exited";
 
@@ -112,8 +117,9 @@ export function startSetup(cols = 80, rows = 24): void {
     holder.emitter.emit("setup:exit", holder.exitCode);
 
     if (code === 0) {
-      // Setup succeeded — restart gateway and invalidate cache
-      console.log("[setup] Setup completed successfully, restarting gateway...");
+      // Setup succeeded — sync token to env files, restart gateway, invalidate cache
+      console.log("[setup] Setup completed successfully, syncing token and restarting gateway...");
+      syncGatewayToken();
       invalidateNeedsSetupCache();
       const restart = spawn("docker", ["compose", "restart", "openclaw-gateway"], {
         stdio: "ignore",
@@ -121,6 +127,11 @@ export function startSetup(cols = 80, rows = 24): void {
       });
       restart.on("close", (rc) => {
         console.log(`[setup] Gateway restart exited with code ${rc}`);
+        if (rc === 0) {
+          postSetupDeviceApproval(holder.emitter).catch((err) =>
+            console.warn("[setup] Post-setup device approval failed:", err)
+          );
+        }
       });
     }
   });
@@ -139,6 +150,127 @@ export function writeSetupInput(data: string): void {
   if (holder.process?.stdin?.writable) {
     holder.process.stdin.write(data);
   }
+}
+
+/**
+ * Read the gateway token from ~/.openclaw/openclaw.json and update
+ * .env (OPENCLAW_GATEWAY_TOKEN) and .env.local (GATEWAY_TOKEN) so the
+ * dashboard and docker-compose stay in sync after onboard generates a new token.
+ */
+function syncGatewayToken(): void {
+  try {
+    const home = process.env.HOME ?? "/root";
+    const config = JSON.parse(
+      fs.readFileSync(path.join(home, ".openclaw", "openclaw.json"), "utf-8")
+    );
+    const token = config?.gateway?.auth?.token;
+    if (!token) return;
+
+    const projectRoot = process.cwd();
+
+    function upsertEnvVar(file: string, key: string, value: string) {
+      const filePath = path.join(projectRoot, file);
+      let content = "";
+      try {
+        content = fs.readFileSync(filePath, "utf-8");
+      } catch {
+        // file doesn't exist yet
+      }
+      const regex = new RegExp(`^${key}=.*$`, "m");
+      if (regex.test(content)) {
+        content = content.replace(regex, `${key}=${value}`);
+      } else {
+        content = content.trimEnd() + `\n${key}=${value}\n`;
+      }
+      fs.writeFileSync(filePath, content);
+    }
+
+    upsertEnvVar(".env", "OPENCLAW_GATEWAY_TOKEN", token);
+    upsertEnvVar(".env.local", "GATEWAY_TOKEN", token);
+    console.log("[setup] Synced gateway token to .env and .env.local");
+  } catch (err) {
+    console.warn("[setup] Failed to sync gateway token:", err);
+  }
+}
+
+/** Read gateway token from config. */
+function readGatewayToken(): string | null {
+  try {
+    const home = process.env.HOME ?? "/root";
+    const config = JSON.parse(
+      fs.readFileSync(path.join(home, ".openclaw", "openclaw.json"), "utf-8")
+    );
+    return config?.gateway?.auth?.token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * After gateway restart: open the openclaw dashboard URL, then poll
+ * `devices list` every 3s until a new pending device appears and auto-approve it.
+ */
+async function postSetupDeviceApproval(emitter: EventEmitter): Promise<void> {
+  const token = readGatewayToken();
+  if (!token) {
+    console.warn("[setup] No gateway token found, skipping device approval");
+    return;
+  }
+
+  const gatewayUrl = "ws://127.0.0.1:18789";
+  const dashboardUrl = `http://localhost:18789/#token=${token}`;
+  const cliArgs = ["--token", token, "--url", gatewayUrl, "--json"];
+
+  // Snapshot existing pending request IDs
+  const existingIds = new Set<string>();
+  try {
+    const { stdout } = await execFileAsync("docker", [
+      "compose", "exec", "openclaw-gateway",
+      "node", "openclaw.mjs", "devices", "list", ...cliArgs,
+    ]);
+    const data = JSON.parse(stdout);
+    for (const p of data.pending ?? []) {
+      existingIds.add(p.requestId);
+    }
+  } catch {
+    // Gateway may still be starting — that's fine, we'll treat all as new
+  }
+
+  // Tell the client to open the dashboard
+  emitter.emit("setup:openUrl", dashboardUrl);
+  console.log(`[setup] Emitted dashboard URL: ${dashboardUrl}`);
+
+  // Poll for new pending device
+  const MAX_ATTEMPTS = 60; // 3s × 60 = 3 minutes
+  for (let i = 0; i < MAX_ATTEMPTS; i++) {
+    await new Promise((r) => setTimeout(r, 3000));
+
+    try {
+      const { stdout } = await execFileAsync("docker", [
+        "compose", "exec", "openclaw-gateway",
+        "node", "openclaw.mjs", "devices", "list", ...cliArgs,
+      ]);
+      const data = JSON.parse(stdout);
+      const newPending = (data.pending ?? []).find(
+        (p: { requestId: string }) => !existingIds.has(p.requestId)
+      );
+
+      if (newPending) {
+        console.log(`[setup] New pending device found: ${newPending.requestId}, approving...`);
+        await execFileAsync("docker", [
+          "compose", "exec", "openclaw-gateway",
+          "node", "openclaw.mjs", "devices", "approve", newPending.requestId, ...cliArgs,
+        ]);
+        console.log("[setup] Device approved successfully");
+        emitter.emit("setup:deviceApproved", newPending.requestId);
+        return;
+      }
+    } catch (err) {
+      console.warn("[setup] Device poll error:", err instanceof Error ? err.message : err);
+    }
+  }
+
+  console.warn("[setup] Timed out waiting for new device pairing request");
 }
 
 /** Reset to idle so the setup wizard can be re-run. */

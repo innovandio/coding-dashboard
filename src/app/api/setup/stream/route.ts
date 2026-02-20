@@ -83,8 +83,30 @@ export async function GET(req: Request) {
         } catch { /* stream closed */ }
       };
 
+      const onOpenUrl = (url: string) => {
+        try {
+          controller.enqueue(
+            encoder.encode(
+              `event: openUrl\ndata: ${JSON.stringify({ url })}\n\n`,
+            ),
+          );
+        } catch { /* stream closed */ }
+      };
+
+      const onDeviceApproved = (requestId: string) => {
+        try {
+          controller.enqueue(
+            encoder.encode(
+              `event: deviceApproved\ndata: ${JSON.stringify({ requestId })}\n\n`,
+            ),
+          );
+        } catch { /* stream closed */ }
+      };
+
       emitter.on("setup:data", onData);
       emitter.on("setup:exit", onExit);
+      emitter.on("setup:openUrl", onOpenUrl);
+      emitter.on("setup:deviceApproved", onDeviceApproved);
 
       // Keepalive every 15s
       const keepalive = setInterval(() => {
@@ -98,6 +120,8 @@ export async function GET(req: Request) {
       req.signal.addEventListener("abort", () => {
         emitter.off("setup:data", onData);
         emitter.off("setup:exit", onExit);
+        emitter.off("setup:openUrl", onOpenUrl);
+        emitter.off("setup:deviceApproved", onDeviceApproved);
         clearInterval(keepalive);
         try {
           controller.close();

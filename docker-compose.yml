@@ -18,5 +18,43 @@ services:
     depends_on:
       - postgres
 
+  openclaw-gateway:
+    build:
+      context: ./docker/openclaw-gateway
+      dockerfile: Dockerfile
+    environment:
+      HOME: ${HOME}
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+    volumes:
+      - ${HOME}/.openclaw:${HOME}/.openclaw
+      - claudedata:${HOME}/.claude
+      - agentdata:/data/agents
+    ports:
+      - "18789:18789"
+    init: true
+    restart: unless-stopped
+    command:
+      - node
+      - openclaw.mjs
+      - gateway
+      - --bind
+      - lan
+      - --port
+      - "18789"
+      - --allow-unconfigured
+
+  sandbox-browser:
+    build:
+      context: https://github.com/openclaw/openclaw.git#main
+      dockerfile: Dockerfile.sandbox-browser
+    ports:
+      - "6080:6080"
+      - "9222:9222"
+      - "5900:5900"
+    shm_size: 2g
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  agentdata:
+  claudedata:

@@ -1,10 +1,14 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import WebSocket from "ws";
 import { getPool } from "./db";
 import { getEventBus, nextSyntheticId, type BusEvent } from "./event-bus";
 import { initGsdWatchers } from "./gsd-watcher";
+
+const execFileAsync = promisify(execFile);
 import type {
   ConnectionState,
   GatewayRequest,
@@ -108,6 +112,8 @@ interface IngestorState {
   pendingRequests: Map<string, PendingRequest>;
   needsSetup: boolean;
   needsSetupCheckedAt: number;
+  needsClaudeLogin: boolean;
+  needsClaudeLoginCheckedAt: number;
 }
 
 // Cache: sessionKey -> { projectId, sessionId, agentId }
@@ -142,6 +148,52 @@ export function invalidateNeedsSetupCache(): void {
   }
 }
 
+// --- needsClaudeLogin detection ---
+
+let claudeLoginCheckInFlight = false;
+
+/**
+ * Check if Claude Code has credentials inside the container.
+ * On Linux, Claude Code stores credentials in plaintext at
+ * $HOME/.claude/.credentials.json (the "plaintext" backend).
+ * We check for this file via `docker compose exec test -f`.
+ * Fire-and-forget — updates state in place, next health poll returns the result.
+ * Only runs when gateway is connected and setup is complete. Cached for 10s.
+ */
+function checkNeedsClaudeLogin(state: IngestorState): void {
+  if (claudeLoginCheckInFlight) return;
+  if (Date.now() - state.needsClaudeLoginCheckedAt < 10000) return;
+  if (state.needsSetup) return;
+  if (state.connectionState !== "connected") return;
+
+  claudeLoginCheckInFlight = true;
+  execFileAsync("docker", [
+    "compose", "exec", "-T", "-u", "node", "openclaw-gateway",
+    "sh", "-c", "test -f $HOME/.claude/.credentials.json",
+  ])
+    .then(() => {
+      // File exists — credentials present
+      state.needsClaudeLogin = false;
+    })
+    .catch(() => {
+      // File missing or container issue — needs login
+      state.needsClaudeLogin = true;
+    })
+    .finally(() => {
+      state.needsClaudeLoginCheckedAt = Date.now();
+      claudeLoginCheckInFlight = false;
+    });
+}
+
+/** Called from claude-login-process.ts after successful login to bust the cache. */
+export function invalidateNeedsClaudeLoginCache(): void {
+  const s = globalForIngestor.ingestorState;
+  if (s) {
+    s.needsClaudeLoginCheckedAt = 0;
+    s.needsClaudeLogin = false;
+  }
+}
+
 function shouldEmit(eventType: string, payload: Record<string, unknown>): boolean {
   if (eventType === "tick") return false;
   if (
@@ -166,6 +218,7 @@ export function getIngestorState(): {
   reconnectAttempts: number;
   agentIds: string[];
   needsSetup: boolean;
+  needsClaudeLogin: boolean;
 } {
   const s = globalForIngestor.ingestorState;
   if (!s) {
@@ -180,6 +233,7 @@ export function getIngestorState(): {
       reconnectAttempts: 0,
       agentIds: [],
       needsSetup: !fs.existsSync(configPath),
+      needsClaudeLogin: false,
     };
   }
 
@@ -187,6 +241,10 @@ export function getIngestorState(): {
   if (s.needsSetupCheckedAt === undefined) {
     s.needsSetupCheckedAt = 0;
     s.needsSetup = false;
+  }
+  if (s.needsClaudeLoginCheckedAt === undefined) {
+    s.needsClaudeLoginCheckedAt = 0;
+    s.needsClaudeLogin = false;
   }
 
   // Lazily fetch agents if connected but list is empty
@@ -197,6 +255,9 @@ export function getIngestorState(): {
   // Lazily check needsSetup (cached for 5s)
   checkNeedsSetup(s);
 
+  // Lazily check needsClaudeLogin (async, cached for 10s, only after setup)
+  checkNeedsClaudeLogin(s);
+
   return {
     connectionState: s.connectionState,
     lastTickAt: s.lastTickAt,
@@ -205,6 +266,7 @@ export function getIngestorState(): {
     reconnectAttempts: s.reconnectAttempts,
     agentIds: Array.from(s.agentIds),
     needsSetup: s.needsSetup,
+    needsClaudeLogin: s.needsClaudeLogin,
   };
 }
 
@@ -276,6 +338,8 @@ export function startIngestor() {
     pendingRequests: new Map(),
     needsSetup: false,
     needsSetupCheckedAt: 0,
+    needsClaudeLogin: false,
+    needsClaudeLoginCheckedAt: 0,
   };
   globalForIngestor.ingestorState = state;
 
@@ -405,6 +469,7 @@ export function startIngestor() {
       if (msg.type === "event") {
         const eventName = msg.event as string;
         const payload = (msg.payload ?? msg) as Record<string, unknown>;
+
 
         let agentId =
           (payload.agentId as string) ??

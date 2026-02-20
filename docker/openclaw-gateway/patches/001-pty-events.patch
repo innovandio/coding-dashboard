@@ -1,0 +1,125 @@
+diff --git a/src/process/pty-events.ts b/src/process/pty-events.ts
+new file mode 100644
+index 000000000..d2b7f9ddb
+--- /dev/null
++++ b/src/process/pty-events.ts
+@@ -0,0 +1,27 @@
++/**
++ * Global PTY event bus – bridges the process supervisor layer with the
++ * gateway broadcast layer.  The supervisor emits raw PTY chunks here;
++ * the gateway subscribes and forwards them to connected WebSocket clients.
++ */
++import { EventEmitter } from "node:events";
++
++export interface PtyDataEvent {
++  runId: string;
++  sessionId: string;
++  backendId: string;
++  label?: string;
++  data: string;
++}
++
++export interface PtyLifecycleEvent {
++  runId: string;
++  sessionId: string;
++  backendId: string;
++  label?: string;
++  pid?: number;
++  cols?: number;
++  rows?: number;
++}
++
++export const ptyBus = new EventEmitter();
++ptyBus.setMaxListeners(200);
+diff --git a/src/gateway/server-methods-list.ts b/src/gateway/server-methods-list.ts
+index 31c9046c3..dc9ac9607 100644
+--- a/src/gateway/server-methods-list.ts
++++ b/src/gateway/server-methods-list.ts
+@@ -119,4 +119,7 @@ export const GATEWAY_EVENTS = [
+   "exec.approval.requested",
+   "exec.approval.resolved",
+   GATEWAY_EVENT_UPDATE_AVAILABLE,
++  "pty.started",
++  "pty.data",
++  "pty.exited",
+ ];
+diff --git a/src/gateway/server.impl.ts b/src/gateway/server.impl.ts
+index 622441831..f1a106a7b 100644
+--- a/src/gateway/server.impl.ts
++++ b/src/gateway/server.impl.ts
+@@ -417,6 +417,12 @@ export async function startGatewayServer(
+   const broadcastVoiceWakeChanged = (triggers: string[]) => {
+     broadcast("voicewake.changed", { triggers }, { dropIfSlow: true });
+   };
++
++  // Forward PTY events from the process supervisor to WebSocket clients.
++  const { ptyBus } = await import("../process/pty-events.js");
++  ptyBus.on("started", (evt) => broadcast("pty.started", evt, { dropIfSlow: true }));
++  ptyBus.on("data", (evt) => broadcast("pty.data", evt, { dropIfSlow: true }));
++  ptyBus.on("exited", (evt) => broadcast("pty.exited", evt, { dropIfSlow: true }));
+   const hasMobileNodeConnected = () => hasConnectedMobileNode(nodeRegistry);
+   applyGatewayLaneConcurrency(cfgAtStart);
+
+diff --git a/src/process/supervisor/supervisor.ts b/src/process/supervisor/supervisor.ts
+index 3c6834003..2c5997b99 100644
+--- a/src/process/supervisor/supervisor.ts
++++ b/src/process/supervisor/supervisor.ts
+@@ -1,6 +1,7 @@
+ import crypto from "node:crypto";
+ import { getShellConfig } from "../../agents/shell-utils.js";
+ import { createSubsystemLogger } from "../../logging/subsystem.js";
++import { ptyBus } from "../pty-events.js";
+ import { createChildAdapter } from "./adapters/child.js";
+ import { createPtyAdapter } from "./adapters/pty.js";
+ import { createRunRegistry } from "./registry.js";
+@@ -146,6 +147,16 @@ export function createProcessSupervisor(): ProcessSupervisor {
+
+       registry.updateState(runId, "running", { pid: adapter.pid });
+
++      // PTY event metadata: include all identifiers for subscriber-side routing.
++      // Use backendId as fallback label when ptyLabel is not explicitly set.
++      const ptyMeta = input.mode === "pty" ? {
++        runId,
++        sessionId: input.sessionId,
++        backendId: input.backendId,
++        label: input.ptyLabel || input.backendId,
++      } : null;
++      if (ptyMeta) ptyBus.emit("started", { ...ptyMeta, pid: adapter.pid });
++
+       const clearTimers = () => {
+         if (timeoutTimer) {
+           clearTimeout(timeoutTimer);
+@@ -180,6 +191,9 @@ export function createProcessSupervisor(): ProcessSupervisor {
+           stdout += chunk;
+         }
+         input.onStdout?.(chunk);
++        if (ptyMeta) {
++          ptyBus.emit("data", { ...ptyMeta, data: chunk });
++        }
+         touchOutput();
+       });
+       adapter.onStderr((chunk) => {
+@@ -209,6 +223,10 @@ export function createProcessSupervisor(): ProcessSupervisor {
+         adapter.dispose();
+         active.delete(runId);
+
++        if (ptyMeta) {
++          ptyBus.emit("exited", { ...ptyMeta, pid: adapter.pid });
++        }
++
+         const reason: TerminationReason =
+           forcedReason ?? (result.signal != null ? ("signal" as const) : ("exit" as const));
+         const exit: RunExit = {
+diff --git a/src/process/supervisor/types.ts b/src/process/supervisor/types.ts
+index 04c571b08..f1e69e5ac 100644
+--- a/src/process/supervisor/types.ts
++++ b/src/process/supervisor/types.ts
+@@ -70,6 +70,8 @@ type SpawnBaseInput = {
+   captureOutput?: boolean;
+   onStdout?: (chunk: string) => void;
+   onStderr?: (chunk: string) => void;
++  /** Opaque label forwarded to pty-events for subscriber-side routing (e.g. agentId). */
++  ptyLabel?: string;
+ };
+
+ type SpawnChildInput = SpawnBaseInput & {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -58,8 +58,11 @@ export function ProjectManagerDialog({
   const [newName, setNewName] = useState("");
   const [newPath, setNewPath] = useState("");
   const [basedOn, setBasedOn] = useState("__blank__");
-  const [addSaving, setAddSaving] = useState(false);
+  const [addPhase, setAddPhase] = useState<
+    "idle" | "confirm" | "registering" | "restarting" | "reconnecting" | "done"
+  >("idle");
   const [addError, setAddError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Agents for "based on" picker
   const [agents, setAgents] = useState<OpenClawAgent[]>([]);
@@ -113,14 +116,26 @@ export function ProjectManagerDialog({
   }
 
   const newAgentId = slugify(newName);
+  const addBusy = !["idle", "confirm"].includes(addPhase);
 
-  async function handleAdd(e: React.FormEvent) {
+  function handleAddOrConfirm(e: React.FormEvent) {
     e.preventDefault();
     if (!newName || !newAgentId || !newPath) return;
 
-    setAddSaving(true);
-    setAddError(null);
+    if (addPhase === "idle") {
+      setAddPhase("confirm");
+      setAddError(null);
+      return;
+    }
+    if (addPhase === "confirm") {
+      doAdd();
+    }
+  }
+
+  async function doAdd() {
     try {
+      // 1. Register agent
+      setAddPhase("registering");
       const agentRes = await fetch("/api/agents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -135,6 +150,8 @@ export function ProjectManagerDialog({
         throw new Error(data.error ?? "Failed to create agent");
       }
 
+      // 2. Save project + restart gateway with workspace mounts
+      setAddPhase("restarting");
       await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -146,20 +163,44 @@ export function ProjectManagerDialog({
         }),
       });
 
+      // 3. Wait for gateway to reconnect
+      setAddPhase("reconnecting");
+      await new Promise<void>((resolve) => {
+        pollRef.current = setInterval(async () => {
+          try {
+            const res = await fetch("/api/health");
+            const data = await res.json();
+            if (data.connectionState === "connected") {
+              if (pollRef.current) clearInterval(pollRef.current);
+              pollRef.current = null;
+              resolve();
+            }
+          } catch { /* still down */ }
+        }, 1000);
+        setTimeout(() => {
+          if (pollRef.current) clearInterval(pollRef.current);
+          pollRef.current = null;
+          resolve();
+        }, 30000);
+      });
+
+      setAddPhase("done");
+      await new Promise((r) => setTimeout(r, 800));
+
       setAdding(false);
       setNewName("");
       setNewPath("");
       setBasedOn("__blank__");
+      setAddPhase("idle");
       onChanged();
     } catch (err) {
+      setAddPhase("idle");
       setAddError(err instanceof Error ? err.message : "Unknown error");
-    } finally {
-      setAddSaving(false);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(v) => { if (!addBusy) setOpen(v); }}>
       <DialogTrigger asChild>
         <Button variant="outline" size="icon" className="rounded-l-none">
           <Settings className="size-3.5" />
@@ -271,7 +312,7 @@ export function ProjectManagerDialog({
         </div>
 
         {adding ? (
-          <form onSubmit={handleAdd} className="space-y-3 border-t pt-3">
+          <form onSubmit={handleAddOrConfirm} className="space-y-3 border-t pt-3">
             <div className="space-y-1.5">
               <Label htmlFor="pm-name" className="text-xs">
                 Name
@@ -282,6 +323,7 @@ export function ProjectManagerDialog({
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="My Project"
                 className="h-7 text-xs"
+                disabled={addBusy}
                 required
               />
               {newAgentId && (
@@ -300,12 +342,13 @@ export function ProjectManagerDialog({
                 onChange={(e) => setNewPath(e.target.value)}
                 placeholder="/Users/me/projects/my-project"
                 className="h-7 text-xs"
+                disabled={addBusy}
                 required
               />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Based on</Label>
-              <Select value={basedOn} onValueChange={setBasedOn}>
+              <Select value={basedOn} onValueChange={setBasedOn} disabled={addBusy}>
                 <SelectTrigger className="h-7 text-xs">
                   <SelectValue />
                 </SelectTrigger>
@@ -319,29 +362,63 @@ export function ProjectManagerDialog({
                 </SelectContent>
               </Select>
             </div>
+            {addPhase === "confirm" && (
+              <div className="rounded-md border border-yellow-600/40 bg-yellow-950/30 px-3 py-2 text-xs text-yellow-200">
+                Adding a project will restart the OpenClaw gateway to mount the
+                workspace. Any active agent sessions will be interrupted briefly.
+              </div>
+            )}
+            {addBusy && (
+              <p className="text-xs text-muted-foreground animate-pulse">
+                {addPhase === "registering" && "Registering agent..."}
+                {addPhase === "restarting" && "Restarting gateway..."}
+                {addPhase === "reconnecting" && "Waiting for gateway..."}
+                {addPhase === "done" && "Done!"}
+              </p>
+            )}
             {addError && (
               <p className="text-xs text-destructive">{addError}</p>
             )}
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setAdding(false);
-                  setAddError(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={addSaving || !newAgentId || !newPath}
-              >
-                {addSaving ? "Creating..." : "Add Project"}
-              </Button>
-            </div>
+            {addPhase === "confirm" ? (
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { setAddPhase("idle"); }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm">
+                  Confirm & Restart Gateway
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={addBusy}
+                  onClick={() => {
+                    setAdding(false);
+                    setAddError(null);
+                    setAddPhase("idle");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={addBusy || !newAgentId || !newPath}
+                >
+                  {addBusy ? (
+                    addPhase === "done" ? "Done!" : "Creating..."
+                  ) : "Add Project"}
+                </Button>
+              </div>
+            )}
           </form>
         ) : (
           <Button
