@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { homedir } from "os";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { getPool } from "@/lib/db";
 import { refreshGsdWatchers } from "@/lib/gateway-ingestor";
 import { syncGatewayMounts } from "@/lib/agent-scaffold";
+
+const execFileAsync = promisify(execFile);
 
 function expandTilde(p: string): string {
   if (p.startsWith("~/")) return homedir() + p.slice(1);
@@ -78,7 +82,26 @@ export async function DELETE(
   const { id } = await params;
   const pool = getPool();
 
+  // Look up agent_id before deleting the row
+  const { rows } = await pool.query<{ agent_id: string }>(
+    `SELECT agent_id FROM projects WHERE id = $1`, [id]
+  );
+  const agentId = rows[0]?.agent_id;
+
+  await pool.query(`DELETE FROM sessions WHERE project_id = $1`, [id]);
   await pool.query(`DELETE FROM projects WHERE id = $1`, [id]);
+
+  // Delete the OpenClaw agent from the gateway
+  if (agentId) {
+    try {
+      await execFileAsync("docker", [
+        "compose", "exec", "openclaw-gateway",
+        "node", "openclaw.mjs", "agents", "delete", agentId, "--force",
+      ]);
+    } catch (err) {
+      console.warn(`[projects] Failed to delete agent ${agentId}:`, err);
+    }
+  }
 
   // Refresh GSD watchers to remove the deleted project's watcher
   refreshGsdWatchers();

@@ -54,12 +54,16 @@ export async function POST(req: NextRequest) {
 
   // Scaffold agent MD files AFTER the gateway restart so `docker compose exec`
   // targets the new container (which has the agent-dir volume mounted).
-  scaffoldAgentFiles({
-    projectId: id,
-    projectName: name,
-  }).catch((err) => {
+  // Awaited so templates are written before the response returns.
+  try {
+    await scaffoldAgentFiles({
+      projectId: id,
+      projectName: name,
+      force: true,
+    });
+  } catch (err) {
     console.warn(`[projects] Failed to scaffold agent files for ${id}:`, err);
-  });
+  }
 
   // Refresh GSD watchers to include the new/updated project
   refreshGsdWatchers();

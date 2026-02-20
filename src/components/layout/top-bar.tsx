@@ -56,7 +56,9 @@ export function TopBar({
               </SelectContent>
             </Select>
           ) : (
-            <span className="text-xs text-muted-foreground mr-1">No projects</span>
+            <div className="flex h-9 w-48 items-center rounded-md rounded-r-none border border-r-0 border-input bg-transparent px-3 py-2 text-xs text-muted-foreground shadow-xs">
+              No projects
+            </div>
           )}
           <ProjectManagerDialog projects={projects} onChanged={onProjectAdded} />
         </div>

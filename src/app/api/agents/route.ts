@@ -44,6 +44,14 @@ export async function POST(req: NextRequest) {
       "-v", `${workspace}:${containerProjectDir}`,
       "openclaw-gateway",
     ];
+
+    // Pre-create the agent directory as root in the running container since the
+    // agentdata volume root is owned by root and the process runs as node.
+    await execFileAsync("docker", [
+      "compose", "exec", "-u", "root", "openclaw-gateway",
+      "sh", "-c", `mkdir -p ${agentDirPath} && chown node:node ${agentDirPath}`,
+    ]);
+
     try {
       await execFileAsync("docker", [
         ...runArgs,

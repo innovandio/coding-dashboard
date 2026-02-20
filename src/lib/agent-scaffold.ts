@@ -14,6 +14,8 @@ export const CONTAINER_AGENTS_ROOT = "/data/agents";
 interface ScaffoldContext {
   projectId: string;
   projectName: string;
+  /** Overwrite existing files (use on initial creation to replace defaults) */
+  force?: boolean;
 }
 
 /** Resolve the agent-dir path as seen by the gateway container */
@@ -32,6 +34,19 @@ export function agentDir(agentId: string): string {
 export async function scaffoldAgentFiles(ctx: ScaffoldContext): Promise<void> {
   const destDir = agentDir(ctx.projectId);
 
+  // Wait for the gateway container to be ready for exec commands (it may have
+  // just been recreated by syncGatewayMounts).
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      await execFileAsync("docker", [
+        "compose", "exec", "openclaw-gateway", "true",
+      ]);
+      break;
+    } catch {
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+
   // Ensure destination directory exists inside the container.
   // Use -u root because the agentdata volume root is owned by root,
   // then chown to node so the gateway process can read the files.
@@ -47,26 +62,29 @@ export async function scaffoldAgentFiles(ctx: ScaffoldContext): Promise<void> {
 
     const dest = `${destDir}/${file}`;
 
-    // Check if file already exists in the container (no-clobber)
-    try {
-      await execFileAsync("docker", [
-        "compose", "exec", "openclaw-gateway",
-        "test", "-f", dest,
-      ]);
-      continue; // File exists — skip
-    } catch {
-      // File doesn't exist — proceed
+    // Check if file already exists in the container (no-clobber unless force)
+    if (!ctx.force) {
+      try {
+        await execFileAsync("docker", [
+          "compose", "exec", "openclaw-gateway",
+          "test", "-f", dest,
+        ]);
+        continue; // File exists — skip
+      } catch {
+        // File doesn't exist — proceed
+      }
     }
 
     let content = await readFile(join(TEMPLATES_DIR, file), "utf-8");
     content = content.replaceAll("{{projectName}}", ctx.projectName);
     content = content.replaceAll("{{projectId}}", ctx.projectId);
 
-    // Write file into the container via stdin
+    // Write file into the container via base64 to avoid stdin piping issues
+    const b64 = Buffer.from(content).toString("base64");
     await execFileAsync("docker", [
       "compose", "exec", "-T", "openclaw-gateway",
-      "sh", "-c", `cat > '${dest}'`,
-    ], { input: content } as never);
+      "sh", "-c", `echo '${b64}' | base64 -d > '${dest}'`,
+    ]);
   }
 
   console.log(`[agent-scaffold] Scaffolded agent files for ${ctx.projectId} in ${destDir}`);

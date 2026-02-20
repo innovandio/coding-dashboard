@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FolderPicker } from "@/components/shared/folder-picker";
 import { Settings, Pencil, Trash2, Plus, Check, X } from "lucide-react";
 import type { Project } from "@/hooks/use-dashboard-state";
 
@@ -227,9 +228,9 @@ export function ProjectManagerDialog({
                     placeholder="Name"
                     className="h-7 text-xs"
                   />
-                  <Input
+                  <FolderPicker
                     value={editPath}
-                    onChange={(e) => setEditPath(e.target.value)}
+                    onChange={setEditPath}
                     placeholder="Workspace path"
                     className="h-7 text-xs"
                   />
@@ -336,14 +337,13 @@ export function ProjectManagerDialog({
               <Label htmlFor="pm-workspace" className="text-xs">
                 Workspace Path
               </Label>
-              <Input
+              <FolderPicker
                 id="pm-workspace"
                 value={newPath}
-                onChange={(e) => setNewPath(e.target.value)}
+                onChange={setNewPath}
                 placeholder="/Users/me/projects/my-project"
                 className="h-7 text-xs"
                 disabled={addBusy}
-                required
               />
             </div>
             <div className="space-y-1.5">
