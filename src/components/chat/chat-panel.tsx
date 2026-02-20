@@ -20,7 +20,7 @@ interface ContentBlock {
 
 /** Strip gateway metadata wrapper from user messages. */
 function stripGatewayWrapper(str: string): string {
-  const match = str.match(/^Conversation info\b.*?\]\s*/s);
+  const match = str.match(/^Conversation info\b[\s\S]*?\]\s*/);
   return match ? str.slice(match[0].length) : str;
 }
 

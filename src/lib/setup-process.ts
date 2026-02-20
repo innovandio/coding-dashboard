@@ -10,7 +10,7 @@ import { spawn, type ChildProcess, execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import path from "path";
-import { invalidateNeedsSetupCache } from "./gateway-ingestor";
+import { invalidateNeedsSetupCache, restartIngestor } from "./gateway-ingestor";
 
 const execFileAsync = promisify(execFile);
 
@@ -119,19 +119,23 @@ export function startSetup(cols = 80, rows = 24): void {
     if (code === 0) {
       // Setup succeeded — sync token to env files, restart gateway, invalidate cache
       console.log("[setup] Setup completed successfully, syncing token and restarting gateway...");
-      syncGatewayToken();
       invalidateNeedsSetupCache();
-      const restart = spawn("docker", ["compose", "restart", "openclaw-gateway"], {
-        stdio: "ignore",
-        env: { ...process.env },
-      });
-      restart.on("close", (rc) => {
-        console.log(`[setup] Gateway restart exited with code ${rc}`);
-        if (rc === 0) {
-          postSetupDeviceApproval(holder.emitter).catch((err) =>
-            console.warn("[setup] Post-setup device approval failed:", err)
-          );
-        }
+      syncGatewayToken().then(() => {
+        const restart = spawn("docker", ["compose", "restart", "openclaw-gateway"], {
+          stdio: "ignore",
+          env: { ...process.env },
+        });
+        restart.on("close", (rc) => {
+          console.log(`[setup] Gateway restart exited with code ${rc}`);
+          if (rc === 0) {
+            // postSetupDeviceApproval waits for gateway ready, snapshots existing
+            // pending devices, THEN restarts the ingestor (so the ingestor's new
+            // pairing request is detected as "new" and gets approved).
+            postSetupDeviceApproval(holder.emitter).catch((err) =>
+              console.warn("[setup] Post-setup device approval failed:", err)
+            );
+          }
+        });
       });
     }
   });
@@ -153,17 +157,13 @@ export function writeSetupInput(data: string): void {
 }
 
 /**
- * Read the gateway token from ~/.openclaw/openclaw.json and update
+ * Read the gateway token from the container's openclaw.json and update
  * .env (OPENCLAW_GATEWAY_TOKEN) and .env.local (GATEWAY_TOKEN) so the
  * dashboard and docker-compose stay in sync after onboard generates a new token.
  */
-function syncGatewayToken(): void {
+async function syncGatewayToken(): Promise<void> {
   try {
-    const home = process.env.HOME ?? "/root";
-    const config = JSON.parse(
-      fs.readFileSync(path.join(home, ".openclaw", "openclaw.json"), "utf-8")
-    );
-    const token = config?.gateway?.auth?.token;
+    const token = await readGatewayToken();
     if (!token) return;
 
     const projectRoot = process.cwd();
@@ -187,20 +187,28 @@ function syncGatewayToken(): void {
 
     upsertEnvVar(".env", "OPENCLAW_GATEWAY_TOKEN", token);
     upsertEnvVar(".env.local", "GATEWAY_TOKEN", token);
-    console.log("[setup] Synced gateway token to .env and .env.local");
+
+    // Update in-memory env so the ingestor uses the new token immediately
+    process.env.GATEWAY_TOKEN = token;
+    process.env.OPENCLAW_GATEWAY_TOKEN = token;
+
+    console.log("[setup] Synced gateway token to .env, .env.local, and process.env");
   } catch (err) {
     console.warn("[setup] Failed to sync gateway token:", err);
   }
 }
 
-/** Read gateway token from config. */
-function readGatewayToken(): string | null {
+/** Read gateway token from the container's openclaw.json via docker exec. */
+async function readGatewayToken(): Promise<string | null> {
   try {
     const home = process.env.HOME ?? "/root";
-    const config = JSON.parse(
-      fs.readFileSync(path.join(home, ".openclaw", "openclaw.json"), "utf-8")
-    );
-    return config?.gateway?.auth?.token ?? null;
+    const { stdout } = await execFileAsync("docker", [
+      "compose", "exec", "-T", "openclaw-gateway",
+      "node", "-e",
+      `const c=JSON.parse(require("fs").readFileSync("${home}/.openclaw/openclaw.json","utf8"));console.log(c.gateway?.auth?.token??"")`,
+    ]);
+    const token = stdout.trim();
+    return token || null;
   } catch {
     return null;
   }
@@ -211,7 +219,7 @@ function readGatewayToken(): string | null {
  * `devices list` every 3s until a new pending device appears and auto-approve it.
  */
 async function postSetupDeviceApproval(emitter: EventEmitter): Promise<void> {
-  const token = readGatewayToken();
+  const token = await readGatewayToken();
   if (!token) {
     console.warn("[setup] No gateway token found, skipping device approval");
     return;
@@ -221,48 +229,69 @@ async function postSetupDeviceApproval(emitter: EventEmitter): Promise<void> {
   const dashboardUrl = `http://localhost:18789/#token=${token}`;
   const cliArgs = ["--token", token, "--url", gatewayUrl, "--json"];
 
-  // Snapshot existing pending request IDs
-  const existingIds = new Set<string>();
-  try {
-    const { stdout } = await execFileAsync("docker", [
-      "compose", "exec", "openclaw-gateway",
-      "node", "openclaw.mjs", "devices", "list", ...cliArgs,
-    ]);
-    const data = JSON.parse(stdout);
-    for (const p of data.pending ?? []) {
-      existingIds.add(p.requestId);
+  // Wait for gateway to be ready
+  let gatewayReady = false;
+  for (let wait = 0; wait < 40; wait++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    try {
+      await execFileAsync("docker", [
+        "compose", "exec", "-T", "openclaw-gateway",
+        "node", "openclaw.mjs", "devices", "list", ...cliArgs,
+      ]);
+      gatewayReady = true;
+      break;
+    } catch {
+      console.log(`[setup] Waiting for gateway to be ready... (attempt ${wait + 1})`);
     }
-  } catch {
-    // Gateway may still be starting — that's fine, we'll treat all as new
   }
 
-  // Tell the client to open the dashboard
+  // Restart ingestor with new token (even if gateway isn't ready yet)
+  restartIngestor();
+
+  if (!gatewayReady) {
+    console.warn("[setup] Gateway did not become ready, skipping device approval");
+    return;
+  }
+
+  // Tell the client to open the dashboard (triggers webchat pairing request)
   emitter.emit("setup:openUrl", dashboardUrl);
   console.log(`[setup] Emitted dashboard URL: ${dashboardUrl}`);
 
-  // Poll for new pending device
+  // Poll and approve ALL pending devices (ingestor + webchat).
+  // After a fresh setup there's no reason to be selective — approve everything.
+  const approvedIds = new Set<string>();
   const MAX_ATTEMPTS = 60; // 3s × 60 = 3 minutes
+  let approvedCount = 0;
   for (let i = 0; i < MAX_ATTEMPTS; i++) {
     await new Promise((r) => setTimeout(r, 3000));
 
     try {
       const { stdout } = await execFileAsync("docker", [
-        "compose", "exec", "openclaw-gateway",
+        "compose", "exec", "-T", "openclaw-gateway",
         "node", "openclaw.mjs", "devices", "list", ...cliArgs,
       ]);
       const data = JSON.parse(stdout);
-      const newPending = (data.pending ?? []).find(
-        (p: { requestId: string }) => !existingIds.has(p.requestId)
-      );
 
-      if (newPending) {
-        console.log(`[setup] New pending device found: ${newPending.requestId}, approving...`);
-        await execFileAsync("docker", [
-          "compose", "exec", "openclaw-gateway",
-          "node", "openclaw.mjs", "devices", "approve", newPending.requestId, ...cliArgs,
-        ]);
-        console.log("[setup] Device approved successfully");
-        emitter.emit("setup:deviceApproved", newPending.requestId);
+      for (const pending of data.pending ?? []) {
+        if (approvedIds.has(pending.requestId)) continue;
+        console.log(`[setup] Pending device found: ${pending.requestId} (${pending.clientId}), approving...`);
+        try {
+          await execFileAsync("docker", [
+            "compose", "exec", "-T", "openclaw-gateway",
+            "node", "openclaw.mjs", "devices", "approve", pending.requestId, ...cliArgs,
+          ]);
+          console.log(`[setup] Device ${pending.clientId} approved successfully`);
+          approvedIds.add(pending.requestId);
+          approvedCount++;
+          emitter.emit("setup:deviceApproved", pending.requestId);
+        } catch (err) {
+          console.warn(`[setup] Failed to approve ${pending.requestId}:`, err instanceof Error ? err.message : err);
+        }
+      }
+
+      // Stop polling once we've approved at least 2 devices (ingestor + webchat)
+      // or after 60s with at least 1 approval
+      if (approvedCount >= 2 || (approvedCount >= 1 && i >= 20)) {
         return;
       }
     } catch (err) {
@@ -270,7 +299,11 @@ async function postSetupDeviceApproval(emitter: EventEmitter): Promise<void> {
     }
   }
 
-  console.warn("[setup] Timed out waiting for new device pairing request");
+  if (approvedCount > 0) {
+    console.log(`[setup] Approved ${approvedCount} device(s)`);
+  } else {
+    console.warn("[setup] Timed out waiting for new device pairing request");
+  }
 }
 
 /** Reset to idle so the setup wizard can be re-run. */

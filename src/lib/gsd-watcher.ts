@@ -138,11 +138,12 @@ export async function initGsdWatchers(
     refreshProject(project.id, project.workspace_path);
   }
 
-  // Remove watchers for projects no longer in the list
+  // Remove watchers and cached tasks for projects no longer in the list
   for (const [id, entry] of state.entries) {
     if (!activeIds.has(id)) {
       stopEntry(entry);
       state.entries.delete(id);
+      state.taskCache.delete(id);
       console.log(`[gsd-watcher] Stopped watching project ${id}`);
     }
   }
@@ -151,8 +152,17 @@ export async function initGsdWatchers(
 
 export function getGsdTasks(projectId?: string): GsdTask[] {
   const state = getState();
-  if (projectId) return state.taskCache.get(projectId) ?? [];
-  return Array.from(state.taskCache.values()).flat();
+  if (projectId) {
+    // Only return cached tasks for projects that are actively watched
+    if (!state.entries.has(projectId)) return [];
+    return state.taskCache.get(projectId) ?? [];
+  }
+  // Only return tasks for actively watched projects
+  const results: GsdTask[] = [];
+  for (const [id, tasks] of state.taskCache) {
+    if (state.entries.has(id)) results.push(...tasks);
+  }
+  return results;
 }
 
 export async function refreshProjectTasks(projectId: string, workspacePath: string): Promise<GsdTask[]> {

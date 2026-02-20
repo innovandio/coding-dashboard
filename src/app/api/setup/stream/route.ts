@@ -1,5 +1,3 @@
-import fs from "fs";
-import path from "path";
 import {
   getSetupEmitter,
   getSetupState,
@@ -19,14 +17,10 @@ export async function GET(req: Request) {
   const emitter = getSetupEmitter();
   const encoder = new TextEncoder();
 
-  // If previous run exited but config still missing, reset to allow a fresh run.
+  // If previous run exited with failure, reset to allow a fresh run.
   // This handles: user re-opens dialog after a failure, or page reload.
-  if (getSetupState() === "exited") {
-    const home = process.env.HOME ?? "/root";
-    const configExists = fs.existsSync(path.join(home, ".openclaw", "openclaw.json"));
-    if (!configExists) {
-      resetSetup();
-    }
+  if (getSetupState() === "exited" && getSetupExitCode() !== 0) {
+    resetSetup();
   }
 
   if (getSetupState() === "idle") {

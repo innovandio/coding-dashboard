@@ -14,6 +14,17 @@ for d in "$REAL_HOME/.openclaw" "$REAL_HOME/.claude"; do
   fi
 done
 
+# The gateway binary resolves home via /etc/passwd (/home/node) rather than $HOME,
+# so it reads /home/node/.openclaw/ for devices/config. Symlink to the bind-mounted dir.
+NODE_HOME=$(getent passwd node | cut -d: -f6)
+if [ -n "$NODE_HOME" ] && [ "$NODE_HOME" != "$REAL_HOME" ]; then
+  if [ -d "$REAL_HOME/.openclaw" ] && [ ! -L "$NODE_HOME/.openclaw" ]; then
+    rm -rf "$NODE_HOME/.openclaw"
+    ln -sf "$REAL_HOME/.openclaw" "$NODE_HOME/.openclaw"
+    echo "[entrypoint] Symlinked $NODE_HOME/.openclaw -> $REAL_HOME/.openclaw"
+  fi
+fi
+
 # Restore .claude.json from backup if missing (it lives in HOME which is ephemeral,
 # but backups are inside the persisted .claude volume)
 if [ ! -f "$REAL_HOME/.claude.json" ] && [ -d "$REAL_HOME/.claude/backups" ]; then

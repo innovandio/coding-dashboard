@@ -79,7 +79,7 @@ function stripAnsi(str: string): string {
  */
 function stripGatewayWrapper(str: string): string {
   // Match: everything up to and including a bracketed timestamp like [Fri 2026-02-20 08:48 UTC]
-  const match = str.match(/^Conversation info\b.*?\]\s*/s);
+  const match = str.match(/^Conversation info\b[\s\S]*?\]\s*/);
   if (match) return str.slice(match[0].length);
   return str;
 }

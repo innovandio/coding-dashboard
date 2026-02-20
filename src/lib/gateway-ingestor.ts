@@ -41,12 +41,7 @@ function derivePublicKeyRaw(publicKeyPem: string): Buffer {
 }
 
 function loadOrCreateDeviceIdentity(): DeviceIdentity {
-  const identityDir = path.join(
-    process.env.HOME ?? "/tmp",
-    ".openclaw",
-    "identity"
-  );
-  const filePath = path.join(identityDir, "dashboard-device.json");
+  const filePath = path.join(process.cwd(), ".data", "device-identity.json");
 
   try {
     if (fs.existsSync(filePath)) {
@@ -124,19 +119,32 @@ const sessionKeyCache = new Map<
 
 // --- needsSetup detection ---
 
+let needsSetupCheckInFlight = false;
+
 /**
- * Check the host filesystem for openclaw.json.
- * The ~/.openclaw dir is bind-mounted into the container, so we can check
- * directly without docker exec (which fails when the container is crash-looping).
- * Result is cached for 5s.
+ * Check if openclaw.json exists inside the container.
+ * The .openclaw dir is a named volume, so we must check via docker exec.
+ * Fire-and-forget — updates state in place. Cached for 5s.
  */
 function checkNeedsSetup(state: IngestorState): void {
+  if (needsSetupCheckInFlight) return;
   if (Date.now() - state.needsSetupCheckedAt < 5000) return;
 
-  const home = process.env.HOME ?? "/root";
-  const configPath = path.join(home, ".openclaw", "openclaw.json");
-  state.needsSetup = !fs.existsSync(configPath);
-  state.needsSetupCheckedAt = Date.now();
+  needsSetupCheckInFlight = true;
+  execFileAsync("docker", [
+    "compose", "exec", "-T", "-u", "node", "openclaw-gateway",
+    "test", "-f", `${process.env.HOME ?? "/root"}/.openclaw/openclaw.json`,
+  ])
+    .then(() => {
+      state.needsSetup = false;
+    })
+    .catch(() => {
+      state.needsSetup = true;
+    })
+    .finally(() => {
+      state.needsSetupCheckedAt = Date.now();
+      needsSetupCheckInFlight = false;
+    });
 }
 
 /** Called from setup-process.ts after successful setup to bust the cache. */
@@ -146,6 +154,31 @@ export function invalidateNeedsSetupCache(): void {
     s.needsSetupCheckedAt = 0;
     s.needsSetup = false;
   }
+}
+
+/**
+ * Force-restart the ingestor connection.
+ * Tears down the current WebSocket and resets the singleton so startIngestor()
+ * can be called again with fresh env vars and a new device identity.
+ */
+export function restartIngestor(): void {
+  const s = globalForIngestor.ingestorState;
+  if (s?.ws) {
+    try { s.ws.close(); } catch { /* ignore */ }
+    s.ws = null;
+  }
+  // Clear pending requests
+  if (s) {
+    for (const [, pending] of s.pendingRequests) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error("Ingestor restarting"));
+    }
+    s.pendingRequests.clear();
+  }
+  globalForIngestor.ingestorStarted = false;
+  globalForIngestor.ingestorState = undefined;
+  console.log("[ingestor] Force-restart: cleared state, will re-init on next startIngestor()");
+  startIngestor();
 }
 
 // --- needsClaudeLogin detection ---
@@ -158,13 +191,13 @@ let claudeLoginCheckInFlight = false;
  * $HOME/.claude/.credentials.json (the "plaintext" backend).
  * We check for this file via `docker compose exec test -f`.
  * Fire-and-forget — updates state in place, next health poll returns the result.
- * Only runs when gateway is connected and setup is complete. Cached for 10s.
+ * Only runs when setup is complete. Cached for 10s.
+ * Uses docker exec (not the WS connection) so it works even while reconnecting.
  */
 function checkNeedsClaudeLogin(state: IngestorState): void {
   if (claudeLoginCheckInFlight) return;
   if (Date.now() - state.needsClaudeLoginCheckedAt < 10000) return;
   if (state.needsSetup) return;
-  if (state.connectionState !== "connected") return;
 
   claudeLoginCheckInFlight = true;
   execFileAsync("docker", [
@@ -222,9 +255,7 @@ export function getIngestorState(): {
 } {
   const s = globalForIngestor.ingestorState;
   if (!s) {
-    // No ingestor yet — do a quick fs check so the UI still detects needsSetup
-    const home = process.env.HOME ?? "/root";
-    const configPath = path.join(home, ".openclaw", "openclaw.json");
+    // No ingestor yet — can't check container volumes, return defaults
     return {
       connectionState: "disconnected",
       lastTickAt: null,
@@ -232,7 +263,7 @@ export function getIngestorState(): {
       connectedSince: null,
       reconnectAttempts: 0,
       agentIds: [],
-      needsSetup: !fs.existsSync(configPath),
+      needsSetup: false,
       needsClaudeLogin: false,
     };
   }
@@ -344,9 +375,8 @@ export function startIngestor() {
   globalForIngestor.ingestorState = state;
 
   const gatewayUrl = process.env.GATEWAY_WS_URL;
-  const gatewayToken = process.env.GATEWAY_TOKEN;
 
-  if (!gatewayUrl || !gatewayToken) {
+  if (!gatewayUrl || !process.env.GATEWAY_TOKEN) {
     console.error("[ingestor] Missing GATEWAY_WS_URL or GATEWAY_TOKEN");
     return;
   }
@@ -357,6 +387,14 @@ export function startIngestor() {
   const bus = getEventBus();
 
   function connect() {
+    // Read token fresh each time — setup-process.ts updates process.env after onboard
+    const gatewayToken = process.env.GATEWAY_TOKEN;
+    if (!gatewayToken) {
+      console.error("[ingestor] No GATEWAY_TOKEN in env, deferring reconnect");
+      scheduleReconnect();
+      return;
+    }
+
     state.connectionState = "connecting";
     console.log(`[ingestor] Connecting to ${gatewayUrl}`);
 

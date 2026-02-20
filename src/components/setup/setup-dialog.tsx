@@ -95,10 +95,10 @@ export function SetupDialog({
   }, [open, containerEl, termReady]);
 
   // Auto-close 2s after the dashboard URL has been opened (post-restart),
-  // or 30s after successful exit as a fallback.
+  // or 120s after successful exit as a fallback (gateway restart + npm update is slow).
   useEffect(() => {
     if (setupState === "exited" && exitCode === 0) {
-      const delay = dashboardOpened ? 2000 : 30000;
+      const delay = dashboardOpened ? 2000 : 120000;
       const timer = setTimeout(onSetupComplete, delay);
       return () => clearTimeout(timer);
     }

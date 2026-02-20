@@ -26,7 +26,7 @@ services:
       HOME: ${HOME}
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
     volumes:
-      - ${HOME}/.openclaw:${HOME}/.openclaw
+      - openclawdata:${HOME}/.openclaw
       - claudedata:${HOME}/.claude
       - agentdata:/data/agents
     ports:
@@ -58,3 +58,4 @@ volumes:
   pgdata:
   agentdata:
   claudedata:
+  openclawdata:
