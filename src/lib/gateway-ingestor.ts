@@ -119,17 +119,35 @@ const sessionKeyCache = new Map<
 
 // --- needsSetup detection ---
 
+let needsSetupCheckInFlight = false;
 
 /**
- * Check if setup has been completed by looking for GATEWAY_TOKEN.
- * The token is only created by the setup wizard (setup-process.ts),
- * so its absence reliably indicates setup is still needed.
- * Cached for 5s.
+ * Check if openclaw.json exists inside the container.
+ * The file is only created by the setup wizard (via `openclaw config set`
+ * and plugin enablement), so its absence indicates setup is still needed.
+ * This correctly detects volume resets even when GATEWAY_TOKEN persists
+ * in the host's .env.local.
+ * Fire-and-forget — updates state in place. Cached for 5s.
  */
 function checkNeedsSetup(state: IngestorState): void {
+  if (needsSetupCheckInFlight) return;
   if (Date.now() - state.needsSetupCheckedAt < 5000) return;
-  state.needsSetupCheckedAt = Date.now();
-  state.needsSetup = !process.env.GATEWAY_TOKEN;
+
+  needsSetupCheckInFlight = true;
+  execFileAsync("docker", [
+    "compose", "exec", "-T", "openclaw-gateway",
+    "sh", "-c", "test -f $HOME/.openclaw/openclaw.json",
+  ])
+    .then(() => {
+      state.needsSetup = false;
+    })
+    .catch(() => {
+      state.needsSetup = true;
+    })
+    .finally(() => {
+      state.needsSetupCheckedAt = Date.now();
+      needsSetupCheckInFlight = false;
+    });
 }
 
 /** Called from setup-process.ts after successful setup to bust the cache. */
