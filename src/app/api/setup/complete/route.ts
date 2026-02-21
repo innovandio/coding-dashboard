@@ -20,12 +20,16 @@ export async function POST() {
         },
         (url) => {
           // Send dashboard URL mid-stream so the client opens it immediately
-          send({ step: 3, status: "processing", data: { dashboardUrl: url } });
+          send({ step: 4, status: "processing", data: { dashboardUrl: url } });
+        },
+        (url) => {
+          // Send OAuth URL mid-stream so the client opens it immediately
+          send({ step: 2, status: "processing", data: { oauthUrl: url } });
         },
       );
 
       // Mark final step as success
-      send({ step: 3, status: "success" });
+      send({ step: 4, status: "success" });
       send({ done: true, success: true, data: { dashboardUrl } });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";

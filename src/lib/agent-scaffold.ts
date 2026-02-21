@@ -48,11 +48,9 @@ export async function scaffoldAgentFiles(ctx: ScaffoldContext): Promise<void> {
   }
 
   // Ensure destination directory exists inside the container.
-  // Use -u root because the agentdata volume root is owned by root,
-  // then chown to node so the gateway process can read the files.
   await execFileAsync("docker", [
-    "compose", "exec", "-u", "root", "openclaw-gateway",
-    "sh", "-c", `mkdir -p ${destDir} && chown node:node ${destDir}`,
+    "compose", "exec", "openclaw-gateway",
+    "mkdir", "-p", destDir,
   ]);
 
   const files = await readdir(TEMPLATES_DIR);

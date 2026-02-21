@@ -34,6 +34,16 @@ export function SetupDialog({
   // Cleanup abort controller on unmount
   useEffect(() => progress.cleanup, [progress.cleanup]);
 
+  // Open OAuth URL as soon as it arrives (mid-stream, for Claude Code login)
+  const [oauthOpened, setOauthOpened] = useState(false);
+  useEffect(() => {
+    const url = progress.resultData?.oauthUrl as string | undefined;
+    if (url && !oauthOpened) {
+      window.open(url, "_blank");
+      setOauthOpened(true);
+    }
+  }, [progress.resultData, oauthOpened]);
+
   // Open dashboard URL as soon as it arrives (mid-stream, before polling finishes)
   const [dashboardOpened, setDashboardOpened] = useState(false);
   useEffect(() => {
@@ -82,6 +92,8 @@ export function SetupDialog({
       // Allow retry — go back to config step
       setStep("config");
       progress.reset();
+      setOauthOpened(false);
+      setDashboardOpened(false);
     }
   }
 

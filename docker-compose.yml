@@ -23,11 +23,10 @@ services:
       context: ./docker/openclaw-gateway
       dockerfile: Dockerfile
     environment:
-      HOME: ${HOME}
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
     volumes:
-      - openclawdata:${HOME}/.openclaw
-      - claudedata:${HOME}/.claude
+      - openclawdata:/root/.openclaw
+      - claudedata:/root/.claude
       - agentdata:/data/agents
     ports:
       - "18789:18789"

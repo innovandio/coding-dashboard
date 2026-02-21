@@ -132,8 +132,8 @@ function checkNeedsSetup(state: IngestorState): void {
 
   needsSetupCheckInFlight = true;
   execFileAsync("docker", [
-    "compose", "exec", "-T", "-u", "node", "openclaw-gateway",
-    "test", "-f", `${process.env.HOME ?? "/root"}/.openclaw/openclaw.json`,
+    "compose", "exec", "-T", "openclaw-gateway",
+    "sh", "-c", "test -f $HOME/.openclaw/openclaw.json",
   ])
     .then(() => {
       state.needsSetup = false;
@@ -201,7 +201,7 @@ function checkNeedsClaudeLogin(state: IngestorState): void {
 
   claudeLoginCheckInFlight = true;
   execFileAsync("docker", [
-    "compose", "exec", "-T", "-u", "node", "openclaw-gateway",
+    "compose", "exec", "-T", "openclaw-gateway",
     "sh", "-c", "test -f $HOME/.claude/.credentials.json",
   ])
     .then(() => {

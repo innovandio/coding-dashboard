@@ -11,23 +11,77 @@ import { promisify } from "util";
 import fs from "fs";
 import path from "path";
 import { invalidateNeedsSetupCache, restartIngestor } from "./gateway-ingestor";
+import { startLogin, getLoginEmitter, getLoginState, resetLogin } from "./claude-login-process";
 
 const execFileAsync = promisify(execFile);
 
 type ProgressCallback = (step: number, label: string) => void;
 
 /**
+ * Check if Claude Code credentials exist inside the gateway container.
+ */
+async function isClaudeAuthed(): Promise<boolean> {
+  try {
+    await execFileAsync("docker", [
+      "compose", "exec", "-T", "openclaw-gateway",
+      "sh", "-c", "test -f $HOME/.claude/.credentials.json",
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Start the OAuth PKCE login flow (same as the standalone Claude login page)
+ * and wait for the callback to complete. The OAuth URL is sent to the client
+ * via onOAuthUrl so it can open the browser.
+ */
+function runClaudeOAuthLogin(
+  onOAuthUrl: (url: string) => void,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const emitter = getLoginEmitter();
+
+    // Always reset to ensure a clean start — previous attempts may have left
+    // the state at "awaiting_auth" (e.g. user closed dialog mid-flow).
+    resetLogin();
+
+    const onExit = (exitCode: number) => {
+      emitter.off("login:oauth-url", onUrl);
+      emitter.off("login:exit", onExit);
+      if (exitCode === 0) resolve();
+      else reject(new Error(`Claude OAuth login failed (exit ${exitCode})`));
+    };
+
+    const onUrl = (url: string) => {
+      onOAuthUrl(url);
+    };
+
+    emitter.on("login:oauth-url", onUrl);
+    emitter.on("login:exit", onExit);
+
+    // Build redirect URI — must be http://localhost:{PORT}/callback
+    const port = process.env.PORT || "3000";
+    const redirectUri = `http://localhost:${port}/callback`;
+    startLogin(redirectUri);
+  });
+}
+
+/**
  * Run all post-setup actions after model configuration:
- * 1. Invalidate needsSetup cache
- * 2. Sync gateway token to .env files
- * 3. Restart gateway to pick up new config
- * 4. Wait for gateway ready, restart ingestor, approve devices
+ * 0. Sync gateway token
+ * 1. Restart gateway
+ * 2. Authenticate Claude Code (OAuth)
+ * 3. Configure sandbox browser
+ * 4. Approve devices
  *
  * Returns the dashboard URL on success, or null on failure.
  */
 export async function runPostSetup(
   onProgress: ProgressCallback,
   onOpenUrl: (url: string) => void,
+  onOAuthUrl: (url: string) => void,
 ): Promise<string | null> {
   // Step 0: Ensure gateway token exists
   onProgress(0, "Syncing gateway token");
@@ -71,12 +125,27 @@ export async function runPostSetup(
     restart.on("error", reject);
   });
 
-  // Step 2: Configure sandbox browser profile
-  onProgress(2, "Configuring sandbox browser");
+  // Step 2: Authenticate Claude Code (OAuth login)
+  onProgress(2, "Authenticating Claude Code");
+  try {
+    const alreadyAuthed = await isClaudeAuthed();
+    if (alreadyAuthed) {
+      console.log("[setup] Claude Code already authenticated, skipping");
+    } else {
+      await runClaudeOAuthLogin(onOAuthUrl);
+      console.log("[setup] Claude Code authenticated successfully");
+    }
+  } catch (err) {
+    // Non-fatal — the gateway works without Claude Code auth
+    console.warn("[setup] Claude Code auth failed (non-fatal):", err instanceof Error ? err.message : err);
+  }
+
+  // Step 3: Configure sandbox browser profile
+  onProgress(3, "Configuring sandbox browser");
   await configureSandboxBrowser(token);
 
-  // Step 3: Approve devices
-  onProgress(3, "Approving devices");
+  // Step 4: Approve devices
+  onProgress(4, "Approving devices");
   const dashboardUrl = await postSetupDeviceApproval(token, onOpenUrl);
 
   // Persist token to .env.local for the Next.js app (triggers hot-reload,

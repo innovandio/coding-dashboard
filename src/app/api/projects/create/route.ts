@@ -12,6 +12,7 @@ import {
 } from "@/lib/agent-scaffold";
 import { sendGatewayRequest } from "@/lib/gateway-ingestor";
 import { createProgressStream } from "@/lib/ndjson-stream";
+import { setDefaultModel, pasteAuthToken, writeCustomProviderConfig } from "@/lib/model-providers";
 
 const execFileAsync = promisify(execFile);
 
@@ -24,7 +25,7 @@ function expandTilde(p: string): string {
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  const { agentId, name, workspace, basedOn } = await req.json();
+  const { agentId, name, workspace, basedOn, modelConfig } = await req.json();
 
   if (!agentId || !name || !workspace) {
     return new Response(
@@ -50,14 +51,14 @@ export async function POST(req: NextRequest) {
         ];
 
         await execFileAsync("docker", [
-          "compose", "exec", "-u", "root", "openclaw-gateway",
-          "sh", "-c", `mkdir -p ${agentDirPath} && chown node:node ${agentDirPath}`,
+          "compose", "exec", "openclaw-gateway",
+          "mkdir", "-p", agentDirPath,
         ]);
 
         try {
           await execFileAsync("docker", [
             ...runArgs,
-            "node", "openclaw.mjs", "agents", "add", agentId,
+            "openclaw", "agents", "add", agentId,
             "--workspace", agentDirPath,
             "--agent-dir", agentDirPath,
             "--non-interactive",
@@ -67,11 +68,11 @@ export async function POST(req: NextRequest) {
           if (msg.includes("already exists")) {
             await execFileAsync("docker", [
               ...runArgs,
-              "node", "openclaw.mjs", "agents", "delete", agentId, "--force",
+              "openclaw", "agents", "delete", agentId, "--force",
             ]);
             await execFileAsync("docker", [
               ...runArgs,
-              "node", "openclaw.mjs", "agents", "add", agentId,
+              "openclaw", "agents", "add", agentId,
               "--workspace", agentDirPath,
               "--agent-dir", agentDirPath,
               "--non-interactive",
@@ -158,8 +159,40 @@ export async function POST(req: NextRequest) {
         return;
       }
 
-      // Step 4: Wait for gateway to reconnect
-      send({ step: 4, status: "processing", label: "Waiting for gateway" });
+      // Step 4: Configure model (if provided)
+      const hasModelConfig = modelConfig?.mode === "custom"
+        ? !!(modelConfig?.customProvider && modelConfig?.customModelId && modelConfig?.apiKey)
+        : !!(modelConfig?.provider && modelConfig?.modelKey && modelConfig?.apiKey);
+
+      if (hasModelConfig) {
+        send({ step: 4, status: "processing", label: "Configuring model" });
+        try {
+          if (modelConfig.mode === "custom") {
+            await writeCustomProviderConfig({
+              provider: modelConfig.customProvider,
+              baseUrl: modelConfig.customBaseUrl,
+              api: modelConfig.customApi || "openai-completions",
+              modelId: modelConfig.customModelId,
+              apiKey: modelConfig.apiKey,
+              agentId,
+            });
+          } else {
+            await pasteAuthToken(modelConfig.provider, modelConfig.apiKey, agentId);
+            await setDefaultModel(modelConfig.modelKey, agentId);
+          }
+          send({ step: 4, status: "success" });
+        } catch (err) {
+          // Non-fatal — project was already created
+          const message = err instanceof Error ? err.message : "Unknown error";
+          console.warn("[projects/create] Model config error:", message);
+          send({ step: 4, status: "success", label: "Configuring model (skipped)" });
+        }
+      } else {
+        send({ step: 4, status: "success", label: "Configuring model (skipped)" });
+      }
+
+      // Step 5: Wait for gateway to reconnect
+      send({ step: 5, status: "processing", label: "Waiting for gateway" });
       try {
         refreshGsdWatchers();
 
@@ -175,14 +208,14 @@ export async function POST(req: NextRequest) {
         }
 
         if (connected) {
-          send({ step: 4, status: "success" });
+          send({ step: 5, status: "success" });
         } else {
           // Timeout is soft — project was created successfully
-          send({ step: 4, status: "success", label: "Waiting for gateway (timed out)" });
+          send({ step: 5, status: "success", label: "Waiting for gateway (timed out)" });
         }
       } catch (err) {
         // Non-fatal — project exists regardless
-        send({ step: 4, status: "success", label: "Waiting for gateway (skipped)" });
+        send({ step: 5, status: "success", label: "Waiting for gateway (skipped)" });
         console.warn("[projects/create] Gateway wait error:", err);
       }
 

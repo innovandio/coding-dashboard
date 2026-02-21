@@ -1,11 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db";
-import {
-  ensureTmuxSession,
-  launchClaudeInSession,
-  registerManagedSession,
-  tmuxSessionName,
-} from "@/lib/tmux-scanner";
 
 export const dynamic = "force-dynamic";
 
@@ -23,33 +17,13 @@ export async function POST(req: NextRequest) {
 
   const pool = getPool();
 
-  // Look up the project (needed for both new and existing sessions)
+  // Look up the project
   const project = await pool.query(
     `SELECT agent_id, name, workspace_path FROM projects WHERE id = $1`,
     [projectId]
   );
   const row = project.rows[0];
   const agentId = row?.agent_id ?? projectId;
-  const projectName = row?.name ?? projectId;
-  const workspacePath = row?.workspace_path ?? "";
-
-  // Always ensure tmux session exists and is registered (survives server restarts)
-  const tmuxName = tmuxSessionName(projectId);
-  try {
-    await ensureTmuxSession(projectId);
-    if (workspacePath) {
-      await launchClaudeInSession(tmuxName, workspacePath);
-    }
-    registerManagedSession(projectId, tmuxName, workspacePath);
-
-    await pool.query(
-      `UPDATE projects SET meta = COALESCE(meta, '{}'::jsonb) || $1::jsonb WHERE id = $2`,
-      [JSON.stringify({ tmux_session: tmuxName }), projectId]
-    );
-
-  } catch (err) {
-    console.warn("[chat.session] Failed to set up tmux session:", err);
-  }
 
   // Check if project already has a chat session
   const existing = await pool.query(
@@ -61,7 +35,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       sessionId: existing.rows[0].id,
       sessionKey: existing.rows[0].session_key,
-      tmuxSession: tmuxName,
     });
   }
 
@@ -76,5 +49,5 @@ export async function POST(req: NextRequest) {
     [sessionId, projectId, sessionKey, JSON.stringify({ type: "chat" })]
   );
 
-  return NextResponse.json({ sessionId, sessionKey, tmuxSession: tmuxName, isNew: true });
+  return NextResponse.json({ sessionId, sessionKey, isNew: true });
 }

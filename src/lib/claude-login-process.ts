@@ -185,8 +185,7 @@ export async function handleCallback(
     // Write credentials into the container
     const credJson = JSON.stringify(credentials);
     await execFileAsync("docker", [
-      "compose", "exec", "-T", "-u", "node",
-      "openclaw-gateway",
+      "compose", "exec", "-T", "openclaw-gateway",
       "sh", "-c",
       `mkdir -p "$HOME/.claude" && cat > "$HOME/.claude/.credentials.json" << 'CREDENTIALS_EOF'
 ${credJson}

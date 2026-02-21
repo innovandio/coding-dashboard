@@ -20,6 +20,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FolderPicker } from "@/components/shared/folder-picker";
 import { StepProgressDialog } from "@/components/shared/step-progress-dialog";
+import {
+  ModelConfigForm,
+  emptyModelConfig,
+  type ModelConfigState,
+} from "@/components/shared/model-config-form";
 import { useStepProgress } from "@/hooks/use-step-progress";
 import { Settings, Pencil, Trash2, Plus, Check, X } from "lucide-react";
 import type { Project } from "@/hooks/use-dashboard-state";
@@ -60,6 +65,7 @@ export function ProjectManagerDialog({
   const [newName, setNewName] = useState("");
   const [newPath, setNewPath] = useState("");
   const [basedOn, setBasedOn] = useState("__blank__");
+  const [modelConfig, setModelConfig] = useState<ModelConfigState>(emptyModelConfig);
   const [addPhase, setAddPhase] = useState<"idle" | "confirm">("idle");
   const [addError, setAddError] = useState<string | null>(null);
 
@@ -146,6 +152,7 @@ export function ProjectManagerDialog({
         name: newName,
         workspace: newPath,
         basedOn: basedOn === "__blank__" ? null : basedOn,
+        modelConfig: modelConfig.apiKey ? modelConfig : undefined,
       }),
     });
   }
@@ -161,6 +168,7 @@ export function ProjectManagerDialog({
       setNewName("");
       setNewPath("");
       setBasedOn("__blank__");
+      setModelConfig(emptyModelConfig);
       setAddPhase("idle");
       setAddError(null);
       onChanged();
@@ -328,6 +336,15 @@ export function ProjectManagerDialog({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Model</Label>
+                <ModelConfigForm
+                  value={modelConfig}
+                  onChange={setModelConfig}
+                  disabled={addBusy}
+                  compact
+                />
               </div>
               {addPhase === "confirm" && (
                 <div className="rounded-md border border-yellow-600/40 bg-yellow-950/30 px-3 py-2 text-xs text-yellow-200">

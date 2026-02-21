@@ -1,46 +1,44 @@
 #!/bin/sh
 set -e
 
-# Save the HOME set by docker-compose (e.g. /Users/andreas) before gosu resets it
-REAL_HOME="$HOME"
+# Persist .claude.json inside the volume-mounted .claude/ directory.
+# The volume is at /root/.claude; symlink /root/.claude.json into it so
+# claude reads config from the volume.
+CLAUDE_JSON_REAL="/root/.claude/.claude.json"
+CLAUDE_JSON_LINK="/root/.claude.json"
 
-# Ensure HOME directory exists and is writable by the node user.
-mkdir -p "$REAL_HOME"
-chown node:node "$REAL_HOME"
-# Fix permissions on bind-mounted/volume-mounted config dirs
-for d in "$REAL_HOME/.openclaw" "$REAL_HOME/.claude"; do
-  if [ -d "$d" ]; then
-    chown -R node:node "$d"
-  fi
-done
-
-# The gateway binary resolves home via /etc/passwd (/home/node) rather than $HOME,
-# so it reads /home/node/.openclaw/ for devices/config. Symlink to the bind-mounted dir.
-NODE_HOME=$(getent passwd node | cut -d: -f6)
-if [ -n "$NODE_HOME" ] && [ "$NODE_HOME" != "$REAL_HOME" ]; then
-  if [ -d "$REAL_HOME/.openclaw" ] && [ ! -L "$NODE_HOME/.openclaw" ]; then
-    rm -rf "$NODE_HOME/.openclaw"
-    ln -sf "$REAL_HOME/.openclaw" "$NODE_HOME/.openclaw"
-    echo "[entrypoint] Symlinked $NODE_HOME/.openclaw -> $REAL_HOME/.openclaw"
-  fi
+# Migrate: if a real file exists (not a symlink), move it into the volume
+if [ -f "$CLAUDE_JSON_LINK" ] && [ ! -L "$CLAUDE_JSON_LINK" ]; then
+  mv "$CLAUDE_JSON_LINK" "$CLAUDE_JSON_REAL"
+  echo "[entrypoint] Migrated .claude.json into .claude/ volume"
 fi
 
-# Restore .claude.json from backup if missing (it lives in HOME which is ephemeral,
-# but backups are inside the persisted .claude volume)
-if [ ! -f "$REAL_HOME/.claude.json" ] && [ -d "$REAL_HOME/.claude/backups" ]; then
-  LATEST_BACKUP=$(ls -t "$REAL_HOME/.claude/backups/.claude.json.backup."* 2>/dev/null | head -1)
-  if [ -n "$LATEST_BACKUP" ]; then
-    echo "[entrypoint] Restoring .claude.json from backup: $LATEST_BACKUP"
-    cp "$LATEST_BACKUP" "$REAL_HOME/.claude.json"
-    chown node:node "$REAL_HOME/.claude.json"
-  fi
+# Seed .claude.json if it doesn't exist yet (first run with fresh volume).
+if [ ! -f "$CLAUDE_JSON_REAL" ] || [ ! -s "$CLAUDE_JSON_REAL" ]; then
+  echo '{}' > "$CLAUDE_JSON_REAL"
 fi
 
-# Update Claude Code as node user (non-blocking on failure)
+# Ensure the symlink exists
+if [ ! -L "$CLAUDE_JSON_LINK" ]; then
+  ln -sf "$CLAUDE_JSON_REAL" "$CLAUDE_JSON_LINK"
+  echo "[entrypoint] Symlinked .claude.json -> .claude/.claude.json"
+fi
+
+# Update Claude Code via native installer (non-blocking on failure).
 echo "[entrypoint] Updating Claude Code..."
-HOME="$REAL_HOME" gosu node npm update -g @anthropic-ai/claude-code --cache /tmp/.npm 2>&1 || echo "[entrypoint] Claude Code update failed, using installed version"
-echo "[entrypoint] Claude Code version: $(HOME="$REAL_HOME" gosu node claude --version 2>/dev/null || echo 'unknown')"
+curl -fsSL https://claude.ai/install.sh | bash > /dev/null 2>&1 || echo "[entrypoint] Claude Code update failed, using installed version"
+echo "[entrypoint] Claude Code version: $(/root/.local/bin/claude --version 2>/dev/null || echo 'unknown')"
 
-# Run the CMD as node user, preserving HOME
-export HOME="$REAL_HOME"
-exec gosu node "$@"
+# Ensure hasCompletedOnboarding is set AFTER the update — the installer may
+# overwrite .claude.json with its own defaults. Merge it into whatever exists.
+node -e "
+  const f = '$CLAUDE_JSON_REAL';
+  const d = JSON.parse(require('fs').readFileSync(f, 'utf8'));
+  if (!d.hasCompletedOnboarding) {
+    d.hasCompletedOnboarding = true;
+    require('fs').writeFileSync(f, JSON.stringify(d, null, 2));
+    console.log('[entrypoint] Set hasCompletedOnboarding in .claude.json');
+  }
+"
+
+exec "$@"
