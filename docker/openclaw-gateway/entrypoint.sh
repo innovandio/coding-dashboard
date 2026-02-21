@@ -41,26 +41,4 @@ node -e "
   }
 "
 
-# Enable custom bundled plugins in openclaw.json (create if needed)
-OPENCLAW_JSON="/root/.openclaw/openclaw.json"
-if [ ! -f "$OPENCLAW_JSON" ]; then
-  mkdir -p /root/.openclaw
-  echo '{}' > "$OPENCLAW_JSON"
-fi
-node -e "
-  const f = '$OPENCLAW_JSON';
-  const d = JSON.parse(require('fs').readFileSync(f, 'utf8'));
-  if (!d.plugins) d.plugins = {};
-  if (!d.plugins.entries) d.plugins.entries = {};
-  let changed = false;
-  if (!d.plugins.entries['pty-broadcast']) {
-    d.plugins.entries['pty-broadcast'] = { enabled: true };
-    changed = true;
-  }
-  if (changed) {
-    require('fs').writeFileSync(f, JSON.stringify(d, null, 2));
-    console.log('[entrypoint] Enabled pty-broadcast plugin');
-  }
-"
-
 exec "$@"

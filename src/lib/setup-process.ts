@@ -110,7 +110,28 @@ export async function runPostSetup(
     console.warn("[setup] Failed to set browser.defaultProfile:", err instanceof Error ? err.message : err);
   }
 
-  // Step 1: Restart gateway (picks up new token + model config + browser default)
+  // Enable the pty-broadcast plugin (writes to openclaw.json).
+  try {
+    await execFileAsync("docker", [
+      "compose", "exec", "-T", "openclaw-gateway",
+      "sh", "-c", `node -e "
+        const f = process.env.HOME + '/.openclaw/openclaw.json';
+        const fs = require('fs');
+        const d = JSON.parse(fs.readFileSync(f, 'utf8'));
+        if (!d.plugins) d.plugins = {};
+        if (!d.plugins.entries) d.plugins.entries = {};
+        if (!d.plugins.entries['pty-broadcast']) {
+          d.plugins.entries['pty-broadcast'] = { enabled: true };
+          fs.writeFileSync(f, JSON.stringify(d, null, 2));
+        }
+      "`,
+    ]);
+    console.log("[setup] Enabled pty-broadcast plugin");
+  } catch (err) {
+    console.warn("[setup] Failed to enable pty-broadcast plugin:", err instanceof Error ? err.message : err);
+  }
+
+  // Step 1: Restart gateway (picks up new token + model config + browser default + plugins)
   onProgress(1, "Restarting gateway");
   await new Promise<void>((resolve, reject) => {
     const restart = spawn("docker", ["compose", "restart", "openclaw-gateway"], {
