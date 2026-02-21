@@ -188,7 +188,22 @@ export async function POST(req: NextRequest) {
           send({ step: 4, status: "success", label: "Configuring model (skipped)" });
         }
       } else {
-        send({ step: 4, status: "success", label: "Configuring model (skipped)" });
+        // "Use global default" — copy models.json from the main agent so
+        // custom provider definitions (base URL, API type) are inherited.
+        send({ step: 4, status: "processing", label: "Inheriting global model" });
+        try {
+          const agentDirPath = agentDir(agentId);
+          await execFileAsync("docker", [
+            "compose", "exec", "-T", "openclaw-gateway",
+            "sh", "-c",
+            `src="/root/.openclaw/agents/main/agent/models.json"; `
+            + `[ -f "$src" ] && cp "$src" "${agentDirPath}/models.json" && echo "copied" || echo "no-src"`,
+          ]);
+          send({ step: 4, status: "success" });
+        } catch (err) {
+          console.warn("[projects/create] Model inherit error:", err instanceof Error ? err.message : err);
+          send({ step: 4, status: "success", label: "Inheriting global model (skipped)" });
+        }
       }
 
       // Step 5: Wait for gateway to reconnect

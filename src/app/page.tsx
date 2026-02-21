@@ -62,7 +62,8 @@ export default function Home() {
 
   const handleSetupComplete = useCallback(() => {
     setSetupOpen(false);
-  }, []);
+    fetchProjects();
+  }, [fetchProjects]);
 
   const handleClaudeLoginComplete = useCallback(() => {
     setClaudeLoginOpen(false);

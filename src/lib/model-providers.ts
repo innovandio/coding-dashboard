@@ -83,8 +83,8 @@ export async function pasteAuthToken(
       if (err) reject(err);
       else resolve();
     });
-    // paste-token reads the token from stdin
-    child.stdin?.end(apiKey + "\n");
+    // paste-token uses a TUI prompt that expects \r (carriage return) to submit
+    child.stdin?.end(apiKey + "\r");
   });
 }
 
@@ -140,6 +140,25 @@ export async function writeCustomProviderConfig(params: {
   await execFileAsync("docker", [
     "compose", "exec", "-T", "openclaw-gateway",
     "sh", "-c", `echo '${modelsB64}' | base64 -d > '${dir}/models.json'`,
+  ]);
+
+  // Write auth-profiles.json — OpenClaw reads auth from this file,
+  // not from the inline apiKey in models.json.
+  const authProfilesJson = JSON.stringify({
+    version: 1,
+    profiles: {
+      [`${provider}:manual`]: {
+        type: "token",
+        provider,
+        token: apiKey,
+      },
+    },
+  }, null, 2);
+  const authB64 = Buffer.from(authProfilesJson).toString("base64");
+
+  await execFileAsync("docker", [
+    "compose", "exec", "-T", "openclaw-gateway",
+    "sh", "-c", `echo '${authB64}' | base64 -d > '${dir}/auth-profiles.json'`,
   ]);
 
   // Set the custom model as default via openclaw config set

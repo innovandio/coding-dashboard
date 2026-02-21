@@ -138,6 +138,20 @@ export function ChatPanel({
     fetchTurns();
   }, [fetchTurns, lifecycleState]);
 
+  // Detect completed chat runs (final/error) — for immediate failures the
+  // agent lifecycle may never fire, so we refetch history on completion.
+  const chatCompletionCount = useMemo(() => {
+    return events.filter((ev) => {
+      if (ev.event_type !== "chat") return false;
+      const p = ev.payload as Record<string, unknown>;
+      return (p.state === "final" || p.state === "error") && p.sessionKey === sessionKey;
+    }).length;
+  }, [events, sessionKey]);
+
+  useEffect(() => {
+    if (chatCompletionCount > 0) fetchTurns();
+  }, [chatCompletionCount, fetchTurns]);
+
   // Build live overlay from SSE events for the current in-progress run
   const liveItems = useMemo((): DisplayItem[] => {
     if (!sessionKey) return [];
@@ -152,6 +166,7 @@ export function ChatPanel({
       firstEventId: number;
       chatText: string;
       chatThinking: string;
+      chatError: string | null;
       isFinal: boolean;
       agentText: string;
       agentThinking: string;
@@ -172,6 +187,7 @@ export function ChatPanel({
           firstEventId: eventId,
           chatText: "",
           chatThinking: "",
+          chatError: null,
           isFinal: false,
           agentText: "",
           agentThinking: "",
@@ -229,7 +245,7 @@ export function ChatPanel({
             run.isFinal = true;
           } else if (state === "error") {
             const { text } = extractContent(msgPayload.content);
-            run.chatText += `\n[Error: ${text || "unknown"}]`;
+            run.chatError = text || "unknown";
             run.isFinal = true;
           }
         }
@@ -305,7 +321,7 @@ export function ChatPanel({
         const thinking = run.chatThinking || run.agentThinking;
         const toolCalls = Array.from(run.toolCalls.values());
 
-        if (text || thinking || toolCalls.length > 0 || !isDone) {
+        if (text || thinking || toolCalls.length > 0 || run.chatError || !isDone) {
           items.push({
             type: "assistant",
             id: `run-${item.runId}`,
@@ -313,6 +329,9 @@ export function ChatPanel({
             thinking: thinking || undefined,
             toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
             isStreaming: !isDone,
+            error: run.chatError
+              ? { message: run.chatError, type: "error", retryCount: 1, isFinal: true }
+              : undefined,
           });
         }
       }
@@ -341,14 +360,21 @@ export function ChatPanel({
       }
     }
 
-    // Only append live items that are still streaming (in-progress).
-    // Completed runs are already represented in historyTurns after the
-    // next fetchTurns() call, so including them here causes duplication.
+    // Append live items, deduplicating against history.
+    // Completed runs may not be in historyTurns yet (fetchTurns is async),
+    // so we keep them visible and skip only if history already has them.
     // User messages: only show those sent AFTER the last history fetch
     // (for instant feedback). Older messages are either already in
     // historyTurns or were never delivered — either way, skip them.
     for (const item of liveItems) {
-      if (item.type === "assistant" && !item.isStreaming) continue;
+      if (item.type === "assistant" && !item.isStreaming) {
+        // Skip if history already contains this content
+        const textSnippet = item.text.slice(0, 80);
+        const alreadyInHistory = textSnippet && items.some(
+          (h) => h.type === "assistant" && h.text.includes(textSnippet)
+        );
+        if (alreadyInHistory) continue;
+      }
       if (item.type === "user") {
         // Skip messages from before the last history fetch
         if (item.ts && item.ts < historyFetchedAt.current) continue;

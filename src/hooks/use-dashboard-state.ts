@@ -125,6 +125,18 @@ export function useDashboardState() {
     return () => clearInterval(interval);
   }, []);
 
+  // Clear stale state when the backend signals a reset (fresh volumes)
+  useEffect(() => {
+    if (health.needsSetup) {
+      setProjects([]);
+      setSelectedProjectId(null);
+      setSessions([]);
+      setSelectedSessionId(null);
+      setGsdTasks(defaultTasks);
+      setEvents([]);
+    }
+  }, [health.needsSetup]);
+
   // Fetch GSD tasks — called on project change, SSE gsd_update events, and 60s fallback poll
   const fetchGsdTasks = useCallback(async () => {
     try {
