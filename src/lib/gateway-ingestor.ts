@@ -494,6 +494,11 @@ export function startIngestor() {
             console.error("[ingestor] agents.list failed:", err.message);
           });
 
+          // Activate PTY event broadcasting via the pty-broadcast plugin
+          sendGatewayRequest("pty.subscribe", {}).catch((err) => {
+            console.error("[ingestor] pty.subscribe failed:", err.message);
+          });
+
           // Start GSD file watchers for all projects with workspace paths
           refreshGsdWatchers();
         } else {

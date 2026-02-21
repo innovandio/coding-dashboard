@@ -15,10 +15,6 @@ WORKDIR /app
 # Clone OpenClaw from GitHub
 RUN git clone --depth 1 --branch main https://github.com/openclaw/openclaw.git .
 
-# Apply local patches before building
-COPY patches/ /tmp/patches/
-RUN git apply /tmp/patches/*.patch && rm -rf /tmp/patches
-
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
@@ -30,6 +26,9 @@ RUN pnpm ui:build
 ENV NODE_ENV=production
 
 RUN ln -s /app/openclaw.mjs /usr/local/bin/openclaw
+
+# Add custom extensions (loaded as bundled plugins, enabled via openclaw.json)
+COPY extensions/ /app/extensions/
 
 COPY --chmod=755 entrypoint.sh /app/entrypoint.sh
 ENTRYPOINT ["/app/entrypoint.sh"]

@@ -1,0 +1,10 @@
+{
+  "id": "pty-broadcast",
+  "name": "PTY Broadcast",
+  "description": "Broadcasts PTY process events (started/data/exited) over the gateway WebSocket.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
