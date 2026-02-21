@@ -11,24 +11,35 @@ import { PtyPanel } from "@/components/terminal/pty-panel";
 import { AiBrainSphere } from "@/components/shared/ai-brain-sphere";
 import type { GsdTask } from "@/hooks/use-dashboard-state";
 import type { BusEvent } from "@/lib/event-bus";
+import type { ConnectionState } from "@/lib/gateway-protocol";
+
+const connectionLabels: Record<ConnectionState, string> = {
+  connected: "Connected",
+  connecting: "Connecting\u2026",
+  authenticating: "Authenticating\u2026",
+  reconnecting: "No Gateway",
+  disconnected: "No Gateway",
+};
 
 export function DashboardShell({
   gsdTasks,
   events,
   projectId,
   agentActive,
+  connectionState,
   terminalThinking,
   onTerminalThinkingChange,
-  onSphereToggle,
 }: {
   gsdTasks: GsdTask[];
   events: BusEvent[];
   projectId: string | null;
   agentActive: boolean;
+  connectionState: ConnectionState;
   terminalThinking?: boolean;
   onTerminalThinkingChange?: (thinking: boolean) => void;
-  onSphereToggle: (v: boolean) => void;
 }) {
+  const isConnected = connectionState === "connected";
+  const isTransitioning = connectionState === "connecting" || connectionState === "authenticating";
   return (
     <div className="flex-1 overflow-hidden">
       <ResizablePanelGroup orientation="vertical">
@@ -38,29 +49,21 @@ export function DashboardShell({
               <TaskBoard tasks={gsdTasks} />
             </div>
             <div className="w-[335px] shrink-0 border-l border-border flex flex-col items-center justify-center bg-card relative">
-              <AiBrainSphere isActive={agentActive} isThinking={terminalThinking} size={256} />
-              <button
-                onClick={() => onSphereToggle(!agentActive)}
-                className="absolute bottom-4 inline-flex items-center h-5 w-9 rounded-full transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                style={{
-                  background: agentActive
-                    ? "rgba(40, 100, 200, 0.35)"
-                    : "rgba(255, 255, 255, 0.08)",
-                  border: `1px solid ${agentActive ? "rgba(60, 140, 255, 0.4)" : "rgba(255, 255, 255, 0.1)"}`,
-                }}
-                aria-label="Toggle AI sphere"
-                role="switch"
-                aria-checked={agentActive}
-              >
+              <AiBrainSphere isActive={agentActive} isConnected={isConnected} isThinking={terminalThinking} size={256} />
+              <span className="absolute bottom-4 inline-flex items-center gap-1.5">
                 <span
-                  className="inline-block h-3.5 w-3.5 rounded-full transition-all duration-300"
-                  style={{
-                    transform: agentActive ? "translateX(17px)" : "translateX(3px)",
-                    background: agentActive ? "rgba(80, 160, 255, 0.85)" : "rgba(255, 255, 255, 0.22)",
-                    boxShadow: agentActive ? "0 0 8px rgba(80, 160, 255, 0.5)" : "none",
-                  }}
+                  className={`h-2 w-2 rounded-full transition-colors duration-500 ${
+                    isConnected
+                      ? "bg-green-500"
+                      : isTransitioning
+                        ? "bg-yellow-500 animate-pulse"
+                        : "bg-muted-foreground/50"
+                  }`}
                 />
-              </button>
+                <span className="text-[11px] text-muted-foreground">
+                  {connectionLabels[connectionState] ?? connectionState}
+                </span>
+              </span>
             </div>
           </div>
         </ResizablePanel>

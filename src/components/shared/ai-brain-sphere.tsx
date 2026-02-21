@@ -5,13 +5,15 @@ import * as THREE from "three";
 
 interface AiBrainSphereProps {
   isActive: boolean;
+  isConnected?: boolean;
   isThinking?: boolean;
   size?: number;
 }
 
-export function AiBrainSphere({ isActive, isThinking = false, size = 256 }: AiBrainSphereProps) {
+export function AiBrainSphere({ isActive, isConnected = true, isThinking = false, size = 256 }: AiBrainSphereProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef(isActive);
+  const connectedRef = useRef(isConnected);
   const thinkingRef = useRef(isThinking);
   const internalsRef = useRef<{
     renderer: THREE.WebGLRenderer;
@@ -21,6 +23,10 @@ export function AiBrainSphere({ isActive, isThinking = false, size = 256 }: AiBr
   useEffect(() => {
     activeRef.current = isActive;
   }, [isActive]);
+
+  useEffect(() => {
+    connectedRef.current = isConnected;
+  }, [isConnected]);
 
   useEffect(() => {
     thinkingRef.current = isThinking;
@@ -99,6 +105,7 @@ export function AiBrainSphere({ isActive, isThinking = false, size = 256 }: AiBr
       uniforms: {
         uTime: { value: 0 },
         uActive: { value: isActive ? 1.0 : 0.0 },
+        uConnected: { value: isConnected ? 1.0 : 0.0 },
         uThinking: { value: isThinking ? 1.0 : 0.0 },
       },
       vertexShader: `
@@ -112,18 +119,23 @@ export function AiBrainSphere({ isActive, isThinking = false, size = 256 }: AiBr
         varying float vAlpha;
         uniform float uTime;
         uniform float uActive;
+        uniform float uConnected;
         uniform float uThinking;
         void main() {
           // Blend to orange for particles in the orange group when thinking
           vec3 orangeColor = vec3(0.85, 0.45, 0.08);
-          vColor = mix(color, orangeColor, aOrangeGroup * uThinking);
+          vec3 liveColor = mix(color, orangeColor, aOrangeGroup * uThinking);
+          // Desaturate to gray when disconnected
+          float luma = dot(liveColor, vec3(0.299, 0.587, 0.114));
+          vec3 grayColor = vec3(luma * 0.45);
+          vColor = mix(grayColor, liveColor, uConnected);
           // Same radius active & inactive — waves are the only difference
           float baseR = origRadius;
           float wave1 = sin(sPhi * 4.0 + sTheta * 3.0 + uTime * 1.8) * 0.20;
           float wave2 = sin(sPhi * 6.0 - sTheta * 2.0 + uTime * 1.1) * 0.14;
           float wave3 = sin(sPhi * 2.5 + sTheta * 5.0 - uTime * 2.2) * 0.10;
-          float waveR = baseR + (wave1 + wave2 + wave3) * uActive;
-          float breathe = sin(uTime * 0.8) * 0.07 * uActive;
+          float waveR = baseR + (wave1 + wave2 + wave3) * uActive * uConnected;
+          float breathe = sin(uTime * 0.8) * 0.07 * uActive * uConnected;
           waveR += breathe;
           vec3 pos;
           pos.x = waveR * sin(sPhi) * cos(sTheta);
@@ -132,11 +144,14 @@ export function AiBrainSphere({ isActive, isThinking = false, size = 256 }: AiBr
           float pulseActive = sin(uTime * 1.5 + pos.y * 3.0) * 0.5 + 0.5;
           float pulseInactive = sin(uTime * 0.4) * 0.3 + 0.5;
           float pulse = mix(pulseInactive, pulseActive, uActive);
-          float activePulse = mix(0.55, 0.85, uActive);
-          vAlpha = (0.15 + pulse * 0.30) * activePulse;
+          // When disconnected, use a flat dim alpha
+          float connectedAlpha = mix(0.55, 0.85, uActive);
+          float disconnectedAlpha = 0.35;
+          float activePulse = mix(disconnectedAlpha, connectedAlpha, uConnected);
+          vAlpha = mix(disconnectedAlpha, (0.15 + pulse * 0.30) * activePulse, uConnected);
           vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
           gl_Position = projectionMatrix * mvPos;
-          gl_PointSize = size * (95.0 / -mvPos.z) * (0.8 + pulse * 0.25 * uActive);
+          gl_PointSize = size * (95.0 / -mvPos.z) * (0.8 + pulse * 0.25 * uActive * uConnected);
         }
       `,
       fragmentShader: `
@@ -205,14 +220,18 @@ export function AiBrainSphere({ isActive, isThinking = false, size = 256 }: AiBr
     );
 
     const synapseMat = new THREE.ShaderMaterial({
-      uniforms: { uTime: { value: 0 }, uActive: { value: isActive ? 1.0 : 0.0 } },
+      uniforms: { uTime: { value: 0 }, uActive: { value: isActive ? 1.0 : 0.0 }, uConnected: { value: isConnected ? 1.0 : 0.0 } },
       vertexShader: `
         attribute vec3 color;
         varying vec3 vColor;
+        varying float vConnected;
         uniform float uTime;
         uniform float uActive;
+        uniform float uConnected;
         void main() {
-          vColor = color;
+          float luma = dot(color, vec3(0.299, 0.587, 0.114));
+          vColor = mix(vec3(luma * 0.45), color, uConnected);
+          vConnected = uConnected;
           vec3 pos = position;
           float r = length(pos);
           float sPhi = acos(clamp(pos.z / r, -1.0, 1.0));
@@ -221,15 +240,16 @@ export function AiBrainSphere({ isActive, isThinking = false, size = 256 }: AiBr
           float wave2 = sin(sPhi * 6.0 - sTheta * 2.0 + uTime * 1.1) * 0.14;
           float wave3 = sin(sPhi * 2.5 + sTheta * 5.0 - uTime * 2.2) * 0.10;
           float breathe = sin(uTime * 0.8) * 0.07;
-          float newR = r + (wave1 + wave2 + wave3 + breathe) * uActive;
+          float newR = r + (wave1 + wave2 + wave3 + breathe) * uActive * uConnected;
           pos = normalize(pos) * newR;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
         }
       `,
       fragmentShader: `
         varying vec3 vColor;
+        varying float vConnected;
         void main() {
-          gl_FragColor = vec4(vColor, 0.05);
+          gl_FragColor = vec4(vColor, mix(0.02, 0.05, vConnected));
         }
       `,
       transparent: true,
@@ -243,7 +263,7 @@ export function AiBrainSphere({ isActive, isThinking = false, size = 256 }: AiBr
     // --- Inner Core Glow (only visible when active) ---
     const coreGeo = new THREE.SphereGeometry(0.35, 32, 32);
     const coreMat = new THREE.ShaderMaterial({
-      uniforms: { uTime: { value: 0 }, uActive: { value: isActive ? 1.0 : 0.0 }, uThinking: { value: isThinking ? 1.0 : 0.0 } },
+      uniforms: { uTime: { value: 0 }, uActive: { value: isActive ? 1.0 : 0.0 }, uConnected: { value: isConnected ? 1.0 : 0.0 }, uThinking: { value: isThinking ? 1.0 : 0.0 } },
       vertexShader: `
         varying vec3 vNormal;
         void main() {
@@ -254,6 +274,7 @@ export function AiBrainSphere({ isActive, isThinking = false, size = 256 }: AiBr
       fragmentShader: `
         uniform float uTime;
         uniform float uActive;
+        uniform float uConnected;
         uniform float uThinking;
         varying vec3 vNormal;
         void main() {
@@ -262,7 +283,8 @@ export function AiBrainSphere({ isActive, isThinking = false, size = 256 }: AiBr
           vec3 blueCol = mix(vec3(0.04, 0.12, 0.55), vec3(0.1, 0.35, 0.75), intensity);
           vec3 orangeCol = mix(vec3(0.55, 0.25, 0.04), vec3(0.75, 0.40, 0.10), intensity);
           vec3 col = mix(blueCol, orangeCol, uThinking * 0.5);
-          gl_FragColor = vec4(col * pulse, intensity * 0.32 * pulse * uActive);
+          // Fade core to nothing when disconnected
+          gl_FragColor = vec4(col * pulse, intensity * 0.32 * pulse * uActive * uConnected);
         }
       `,
       transparent: true,
@@ -275,6 +297,7 @@ export function AiBrainSphere({ isActive, isThinking = false, size = 256 }: AiBr
     // --- Animation (delta-time rotation to avoid spin jumps on transition) ---
     const clock = new THREE.Clock();
     let activeSmooth = isActive ? 1.0 : 0.0;
+    let connectedSmooth = isConnected ? 1.0 : 0.0;
     let thinkingSmooth = isThinking ? 1.0 : 0.0;
     let rotY = 0;
     let frameId = 0;
@@ -287,20 +310,27 @@ export function AiBrainSphere({ isActive, isThinking = false, size = 256 }: AiBr
       const target = activeRef.current ? 1.0 : 0.0;
       activeSmooth += (target - activeSmooth) * 0.03;
 
+      const connectedTarget = connectedRef.current ? 1.0 : 0.0;
+      connectedSmooth += (connectedTarget - connectedSmooth) * 0.03;
+
       const thinkingTarget = thinkingRef.current ? 1.0 : 0.0;
       thinkingSmooth += (thinkingTarget - thinkingSmooth) * 0.03;
 
       particleMat.uniforms.uTime.value = t;
       particleMat.uniforms.uActive.value = activeSmooth;
+      particleMat.uniforms.uConnected.value = connectedSmooth;
       particleMat.uniforms.uThinking.value = thinkingSmooth;
       synapseMat.uniforms.uTime.value = t;
       synapseMat.uniforms.uActive.value = activeSmooth;
+      synapseMat.uniforms.uConnected.value = connectedSmooth;
       coreMat.uniforms.uTime.value = t;
       coreMat.uniforms.uActive.value = activeSmooth;
+      coreMat.uniforms.uConnected.value = connectedSmooth;
       coreMat.uniforms.uThinking.value = thinkingSmooth;
 
       // Accumulate rotation via delta — speed changes don't cause jumps
-      const rotSpeed = 0.08 + activeSmooth * 0.04;
+      // Stop rotation when disconnected
+      const rotSpeed = (0.08 + activeSmooth * 0.04) * connectedSmooth;
       rotY += dt * rotSpeed;
       particles.rotation.y = rotY;
       particles.rotation.x = Math.sin(rotY * 0.6) * (0.05 + activeSmooth * 0.08);

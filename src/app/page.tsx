@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { TopBar } from "@/components/layout/top-bar";
 import { SessionTabs } from "@/components/layout/session-tabs";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
@@ -8,6 +8,7 @@ import { SetupDialog } from "@/components/setup/setup-dialog";
 import { ClaudeLoginDialog } from "@/components/setup/claude-login-dialog";
 import { useDashboardState } from "@/hooks/use-dashboard-state";
 import { useAgentActivity } from "@/components/activity/use-agent-activity";
+import type { ConnectionState } from "@/lib/gateway-protocol";
 
 export default function Home() {
   const {
@@ -24,7 +25,6 @@ export default function Home() {
   } = useDashboardState();
 
   const { lifecycleState } = useAgentActivity(events);
-  const [sphereActive, setSphereActive] = useState(false);
   const [terminalThinking, setTerminalThinking] = useState(false);
   // Latch: once the setup dialog opens, keep it open until the process exits.
   // health.needsSetup may flip to false mid-wizard (config written early).
@@ -33,7 +33,6 @@ export default function Home() {
   // Dismissed latch: once the user completes/closes the login dialog,
   // don't reopen it until needsClaudeLogin flips to false first.
   const [claudeLoginDismissed, setClaudeLoginDismissed] = useState(false);
-  const prevLifecycle = useRef(lifecycleState);
 
   useEffect(() => {
     if (health.needsSetup && !setupOpen) {
@@ -70,20 +69,8 @@ export default function Home() {
     setClaudeLoginDismissed(true);
   }, []);
 
-  // Auto-sync: activate when agent starts running, deactivate when it stops
-  useEffect(() => {
-    if (prevLifecycle.current !== lifecycleState) {
-      if (lifecycleState === "running") {
-        setSphereActive(true);
-      } else if (prevLifecycle.current === "running") {
-        setSphereActive(false);
-      }
-      prevLifecycle.current = lifecycleState;
-    }
-  }, [lifecycleState]);
-
-  // Also activate sphere when Claude Code in terminal is thinking
-  const effectiveSphereActive = sphereActive || terminalThinking;
+  // Sphere is active when an agent is running or terminal is thinking
+  const agentActive = lifecycleState === "running" || terminalThinking;
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
@@ -96,7 +83,6 @@ export default function Home() {
         onLoginComplete={handleClaudeLoginComplete}
       />
       <TopBar
-        health={health}
         projects={projects}
         selectedProjectId={selectedProjectId}
         onSelectProject={setSelectedProjectId}
@@ -111,10 +97,10 @@ export default function Home() {
         gsdTasks={gsdTasks}
         events={events}
         projectId={selectedProjectId}
-        agentActive={effectiveSphereActive}
+        agentActive={agentActive}
+        connectionState={health.connectionState as ConnectionState}
         terminalThinking={terminalThinking}
         onTerminalThinkingChange={setTerminalThinking}
-        onSphereToggle={setSphereActive}
       />
     </div>
   );
