@@ -14,6 +14,7 @@ export function useStepProgress() {
   const [done, setDone] = useState(false);
   const [success, setSuccess] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [resultData, setResultData] = useState<Record<string, unknown> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const reset = useCallback(() => {
@@ -21,6 +22,7 @@ export function useStepProgress() {
     setDone(false);
     setSuccess(false);
     setGlobalError(null);
+    setResultData(null);
   }, []);
 
   const start = useCallback(async (url: string, init?: RequestInit) => {
@@ -76,6 +78,7 @@ export function useStepProgress() {
               const doneEvt = event as DoneEvent;
               setDone(true);
               setSuccess(doneEvt.success);
+              if (doneEvt.data) setResultData(doneEvt.data);
               if (doneEvt.error && !doneEvt.success) {
                 setGlobalError(doneEvt.error);
               }
@@ -94,6 +97,9 @@ export function useStepProgress() {
                 };
                 return next;
               });
+              if (stepEvt.data) {
+                setResultData((prev) => ({ ...prev, ...stepEvt.data }));
+              }
             }
           } catch {
             // Skip malformed lines
@@ -113,5 +119,5 @@ export function useStepProgress() {
     abortRef.current?.abort();
   }, []);
 
-  return { steps, done, success, globalError, start, reset, cleanup };
+  return { steps, done, success, globalError, resultData, start, reset, cleanup };
 }

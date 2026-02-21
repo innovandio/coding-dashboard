@@ -5,12 +5,16 @@ export interface StepEvent {
   status: StepStatus;
   label?: string;
   error?: string;
+  /** Arbitrary payload attached to this step update. */
+  data?: Record<string, unknown>;
 }
 
 export interface DoneEvent {
   done: true;
   success: boolean;
   error?: string;
+  /** Arbitrary payload passed back to the client on completion. */
+  data?: Record<string, unknown>;
 }
 
 export type ProgressEvent = StepEvent | DoneEvent;
