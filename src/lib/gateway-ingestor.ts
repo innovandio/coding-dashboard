@@ -126,7 +126,7 @@ let needsSetupCheckInFlight = false;
  * The file is only created by the setup wizard (via `openclaw config set`
  * and plugin enablement), so its absence indicates setup is still needed.
  * This correctly detects volume resets even when GATEWAY_TOKEN persists
- * in the host's .env.local.
+ * in the host's .env.
  * Fire-and-forget — updates state in place. Cached for 5s.
  */
 function checkNeedsSetup(state: IngestorState): void {

@@ -91,11 +91,9 @@ export async function runPostSetup(
 
   // Update process.env so the ingestor can use the token immediately
   process.env.GATEWAY_TOKEN = token;
-  process.env.OPENCLAW_GATEWAY_TOKEN = token;
 
   // Persist token to .env BEFORE restarting the gateway, so docker-compose
-  // passes it to the container. (.env is read by docker-compose, not Next.js,
-  // so this doesn't trigger a hot-reload.)
+  // passes it to the container.
   syncTokenToEnvFile(token);
 
   // Pre-configure sandbox browser as default profile (writes to openclaw.json
@@ -169,10 +167,6 @@ export async function runPostSetup(
   onProgress(4, "Approving devices");
   const dashboardUrl = await postSetupDeviceApproval(token, onOpenUrl);
 
-  // Persist token to .env.local for the Next.js app (triggers hot-reload,
-  // so do this last after all critical async work is done).
-  syncTokenToEnvLocal(token);
-
   return dashboardUrl;
 }
 
@@ -193,37 +187,22 @@ function upsertEnvVar(file: string, key: string, value: string) {
   fs.writeFileSync(filePath, content);
 }
 
-/** Write token to .env (read by docker-compose — does NOT trigger Next.js reload). */
+/** Persist token to .env (read by both Next.js and docker-compose). */
 function syncTokenToEnvFile(token: string): void {
   try {
-    upsertEnvVar(".env", "OPENCLAW_GATEWAY_TOKEN", token);
-    console.log("[setup] Wrote OPENCLAW_GATEWAY_TOKEN to .env");
+    upsertEnvVar(".env", "GATEWAY_TOKEN", token);
+    console.log("[setup] Wrote GATEWAY_TOKEN to .env");
   } catch (err) {
     console.warn("[setup] Failed to write .env:", err);
   }
 }
 
 /**
- * Write token to .env.local (read by Next.js).
- * WARNING: Triggers a dev-server hot-reload — call only after critical work is done.
- */
-function syncTokenToEnvLocal(token: string): void {
-  try {
-    upsertEnvVar(".env.local", "GATEWAY_TOKEN", token);
-    console.log("[setup] Wrote GATEWAY_TOKEN to .env.local");
-  } catch (err) {
-    console.warn("[setup] Failed to write .env.local:", err);
-  }
-}
-
-/**
- * Read the gateway token. The token lives in the host's .env file as
- * OPENCLAW_GATEWAY_TOKEN and is passed to the container via docker-compose.
- * If no token exists yet (first-time setup), generate one and persist it.
+ * Read the gateway token from process.env or .env on disk.
+ * If no token exists yet (first-time setup), generate one.
  */
 function getOrCreateGatewayToken(): string {
-  // Check in-memory env first (may have been set by a previous run)
-  const existing = process.env.OPENCLAW_GATEWAY_TOKEN;
+  const existing = process.env.GATEWAY_TOKEN;
   if (existing) return existing;
 
   // Check .env file on disk
@@ -231,7 +210,7 @@ function getOrCreateGatewayToken(): string {
   const envPath = path.join(projectRoot, ".env");
   try {
     const content = fs.readFileSync(envPath, "utf-8");
-    const match = content.match(/^OPENCLAW_GATEWAY_TOKEN=(.+)$/m);
+    const match = content.match(/^GATEWAY_TOKEN=(.+)$/m);
     if (match?.[1]) return match[1];
   } catch {
     // .env doesn't exist yet

@@ -23,7 +23,7 @@ services:
       context: ./docker/openclaw-gateway
       dockerfile: Dockerfile
     environment:
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      OPENCLAW_GATEWAY_TOKEN: ${GATEWAY_TOKEN}
     volumes:
       - openclawdata:/root/.openclaw
       - claudedata:/root/.claude
