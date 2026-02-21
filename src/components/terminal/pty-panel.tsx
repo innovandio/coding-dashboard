@@ -65,10 +65,12 @@ export function PtyPanel({
   projectId: string | null;
   onThinkingChange?: (thinking: boolean) => void;
 }) {
-  const { setTerminal, connected, hasActivity, activeRuns } = usePtyStream(projectId);
+  const { setTerminal, connected, hasActivity, activeRuns, sendInputToAll } = usePtyStream(projectId);
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<import("@xterm/addon-fit").FitAddon | null>(null);
+  const sendInputToAllRef = useRef(sendInputToAll);
+  sendInputToAllRef.current = sendInputToAll;
 
   // Ping-back settings (per project)
   const [pingBackEnabled, setPingBackEnabled] = useState(false);
@@ -139,6 +141,11 @@ export function PtyPanel({
         term.open(containerRef.current);
         fitAddon.fit();
       }
+
+      // Forward user keystrokes to all active PTY processes.
+      term.onData((data) => {
+        sendInputToAllRef.current(data);
+      });
 
       terminalRef.current = term;
       fitAddonRef.current = fitAddon;

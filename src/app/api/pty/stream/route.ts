@@ -1,4 +1,4 @@
-import { getPtyEmitter } from "@/lib/pty-emitter";
+import { getPtyEmitter, getRunBuffers } from "@/lib/pty-emitter";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +11,22 @@ export async function GET(req: Request) {
 
   const stream = new ReadableStream({
     start(controller) {
+      // Replay buffered screen data for active runs
+      if (projectId) {
+        for (const { runId, data } of getRunBuffers(projectId)) {
+          if (!data) continue;
+          try {
+            // Send a synthetic "started" so the client tracks the run
+            controller.enqueue(
+              encoder.encode(`event: started\ndata: ${JSON.stringify({ type: "started", runId })}\n\n`)
+            );
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ runId, data })}\n\n`)
+            );
+          } catch { /* stream closed */ }
+        }
+      }
+
       const onData = (payload: Record<string, unknown>) => {
         if (projectId && payload.projectId !== projectId) return;
         const data = JSON.stringify({

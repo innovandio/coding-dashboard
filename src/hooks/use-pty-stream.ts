@@ -9,15 +9,72 @@ import type { Terminal } from "@xterm/xterm";
  *
  * Supports multiple concurrent processes (distinguished by runId).
  * All processes for the given projectId are rendered into the same terminal.
+ *
+ * Also provides sendInput() and killProcess() for interactive control.
  */
 export function usePtyStream(projectId: string | null) {
   const termRef = useRef<Terminal | null>(null);
+  const pendingWrites = useRef<string[]>([]);
   const [connected, setConnected] = useState(false);
   const [hasActivity, setHasActivity] = useState(false);
   const [activeRuns, setActiveRuns] = useState<Set<string>>(new Set());
 
   const setTerminal = useCallback((term: Terminal | null) => {
     termRef.current = term;
+    // Flush any data that arrived before the terminal was ready
+    if (term && pendingWrites.current.length > 0) {
+      for (const data of pendingWrites.current) {
+        term.write(data);
+      }
+      pendingWrites.current = [];
+    }
+  }, []);
+
+  /** Write to terminal, buffering if it isn't ready yet. */
+  const writeToTerminal = useCallback((data: string) => {
+    if (termRef.current) {
+      termRef.current.write(data);
+    } else {
+      pendingWrites.current.push(data);
+    }
+  }, []);
+
+  /** Send raw input data to a specific PTY process. */
+  const sendInput = useCallback(
+    async (runId: string, data: string) => {
+      try {
+        await fetch("/api/pty/input", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ runId, data }),
+        });
+      } catch {
+        /* best effort */
+      }
+    },
+    [],
+  );
+
+  /** Send input to all active PTY processes. */
+  const sendInputToAll = useCallback(
+    async (data: string) => {
+      const runs = Array.from(activeRuns);
+      await Promise.all(runs.map((runId) => sendInput(runId, data)));
+    },
+    [activeRuns, sendInput],
+  );
+
+  /** Kill a specific PTY process. */
+  const killProcess = useCallback(async (runId: string) => {
+    try {
+      await fetch("/api/pty/kill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runId }),
+      });
+    } catch {
+      /* best effort */
+    }
   }, []);
 
   useEffect(() => {
@@ -25,6 +82,7 @@ export function usePtyStream(projectId: string | null) {
       setConnected(false);
       setHasActivity(false);
       setActiveRuns(new Set());
+      pendingWrites.current = [];
       return;
     }
 
@@ -39,8 +97,8 @@ export function usePtyStream(projectId: string | null) {
     es.onmessage = (e) => {
       try {
         const payload = JSON.parse(e.data);
-        if (payload.data && termRef.current) {
-          termRef.current.write(payload.data);
+        if (payload.data) {
+          writeToTerminal(payload.data);
           setHasActivity(true);
         }
       } catch { /* ignore parse errors */ }
@@ -64,15 +122,16 @@ export function usePtyStream(projectId: string | null) {
           runs.delete(payload.runId);
           setActiveRuns(new Set(runs));
         }
-        termRef.current?.write("\r\n\x1b[90m[process exited]\x1b[0m\r\n");
+        writeToTerminal("\r\n\x1b[90m[process exited]\x1b[0m\r\n");
       } catch { /* ignore */ }
     });
 
     return () => {
       es.close();
       setConnected(false);
+      pendingWrites.current = [];
     };
-  }, [projectId]);
+  }, [projectId, writeToTerminal]);
 
-  return { setTerminal, connected, hasActivity, activeRuns };
+  return { setTerminal, connected, hasActivity, activeRuns, sendInput, sendInputToAll, killProcess };
 }
