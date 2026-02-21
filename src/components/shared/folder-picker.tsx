@@ -65,13 +65,13 @@ export function FolderPicker({
   }
 
   return (
-    <div className="flex gap-1">
+    <div className="flex items-stretch">
       <Input
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder ?? "/path/to/project"}
-        className={className}
+        className={`${className ?? ""} rounded-r-none border-r-0`}
         disabled={disabled}
       />
       <Popover open={open} onOpenChange={setOpen}>
@@ -81,7 +81,7 @@ export function FolderPicker({
             variant="outline"
             size="icon-xs"
             disabled={disabled}
-            className="shrink-0 self-center"
+            className="shrink-0 h-auto rounded-l-none"
           >
             <FolderOpen className="size-3" />
           </Button>

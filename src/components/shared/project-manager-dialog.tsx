@@ -66,6 +66,7 @@ export function ProjectManagerDialog({
   const [newPath, setNewPath] = useState("");
   const [basedOn, setBasedOn] = useState("__blank__");
   const [modelConfig, setModelConfig] = useState<ModelConfigState>(emptyModelConfig);
+  const [useGlobalModel, setUseGlobalModel] = useState(true);
   const [addPhase, setAddPhase] = useState<"idle" | "confirm">("idle");
   const [addError, setAddError] = useState<string | null>(null);
 
@@ -119,6 +120,7 @@ export function ProjectManagerDialog({
 
   function confirmDelete(id: string) {
     setDeletingId(null);
+    setOpen(false);
     setProgressTitle("Deleting Project");
     setProgressOpen(true);
     progress.start(`/api/projects/${id}/delete`, { method: "POST" });
@@ -142,6 +144,7 @@ export function ProjectManagerDialog({
   }
 
   function doAdd() {
+    setOpen(false);
     setProgressTitle("Creating Project");
     setProgressOpen(true);
     progress.start("/api/projects/create", {
@@ -152,7 +155,7 @@ export function ProjectManagerDialog({
         name: newName,
         workspace: newPath,
         basedOn: basedOn === "__blank__" ? null : basedOn,
-        modelConfig: modelConfig.apiKey ? modelConfig : undefined,
+        modelConfig: !useGlobalModel && modelConfig.apiKey ? modelConfig : undefined,
       }),
     });
   }
@@ -169,6 +172,7 @@ export function ProjectManagerDialog({
       setNewPath("");
       setBasedOn("__blank__");
       setModelConfig(emptyModelConfig);
+      setUseGlobalModel(true);
       setAddPhase("idle");
       setAddError(null);
       onChanged();
@@ -324,11 +328,11 @@ export function ProjectManagerDialog({
               <div className="space-y-1.5">
                 <Label className="text-xs">Based on</Label>
                 <Select value={basedOn} onValueChange={setBasedOn} disabled={addBusy}>
-                  <SelectTrigger className="h-7 text-xs">
+                  <SelectTrigger className="w-full h-7 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__blank__">Blank agent</SelectItem>
+                    <SelectItem value="__blank__">Coding Template</SelectItem>
                     {agents.map((a) => (
                       <SelectItem key={a.id} value={a.id}>
                         {a.identityEmoji} {a.identityName} ({a.id})
@@ -339,12 +343,30 @@ export function ProjectManagerDialog({
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Model</Label>
-                <ModelConfigForm
-                  value={modelConfig}
-                  onChange={setModelConfig}
+                <Select
+                  value={useGlobalModel ? "global" : "custom"}
+                  onValueChange={(v) => {
+                    setUseGlobalModel(v === "global");
+                    if (v === "global") setModelConfig(emptyModelConfig);
+                  }}
                   disabled={addBusy}
-                  compact
-                />
+                >
+                  <SelectTrigger className="w-full h-7 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="global">Use global default</SelectItem>
+                    <SelectItem value="custom">Configure per-project</SelectItem>
+                  </SelectContent>
+                </Select>
+                {!useGlobalModel && (
+                  <ModelConfigForm
+                    value={modelConfig}
+                    onChange={setModelConfig}
+                    disabled={addBusy}
+                    compact
+                  />
+                )}
               </div>
               {addPhase === "confirm" && (
                 <div className="rounded-md border border-yellow-600/40 bg-yellow-950/30 px-3 py-2 text-xs text-yellow-200">

@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { getPool } from "@/lib/db";
-import { refreshGsdWatchers } from "@/lib/gateway-ingestor";
+import { refreshGsdWatchers, getIngestorState } from "@/lib/gateway-ingestor";
 import { syncGatewayMounts } from "@/lib/agent-scaffold";
 import { createProgressStream } from "@/lib/ndjson-stream";
 
@@ -86,6 +86,24 @@ export async function POST(
         // Non-fatal — project is deleted regardless
         console.warn("[projects/delete] Failed to sync gateway mounts:", err);
         send({ step: 3, status: "success", label: "Syncing gateway mounts (skipped)" });
+      }
+
+      // Step 4: Wait for gateway to reconnect
+      send({ step: 4, status: "processing", label: "Waiting for gateway" });
+      try {
+        const deadline = Date.now() + 60_000;
+        let connected = false;
+        while (Date.now() < deadline) {
+          const state = getIngestorState();
+          if (state.connectionState === "connected") {
+            connected = true;
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+        send({ step: 4, status: "success", label: connected ? "Gateway connected" : "Gateway still starting (project deleted)" });
+      } catch {
+        send({ step: 4, status: "success", label: "Waiting for gateway (skipped)" });
       }
 
       send({ done: true, success: true });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BusEvent } from "@/lib/event-bus";
 
 export function useEventStream(
@@ -39,27 +39,4 @@ export function useEventStream(
   }, [projectId, sessionId]);
 
   return { connected };
-}
-
-export function useEventStreamAccumulator(
-  projectId: string | null,
-  sessionId: string | null,
-  maxEvents = 200
-) {
-  const [events, setEvents] = useState<BusEvent[]>([]);
-
-  const handleEvent = useCallback(
-    (ev: BusEvent) => {
-      setEvents((prev) => {
-        const next = [...prev, ev];
-        if (next.length > maxEvents) return next.slice(-maxEvents);
-        return next;
-      });
-    },
-    [maxEvents]
-  );
-
-  const { connected } = useEventStream(projectId, sessionId, handleEvent);
-
-  return { events, connected };
 }

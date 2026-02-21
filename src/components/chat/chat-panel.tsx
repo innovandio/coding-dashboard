@@ -9,6 +9,7 @@ import { LifecycleBanner } from "./lifecycle-banner";
 import { ChatInput } from "./chat-input";
 import { useAgentActivity } from "@/components/activity/use-agent-activity";
 import { formatArgsSummary } from "@/lib/format-args";
+import { parseToolEvent, isToolComplete } from "@/lib/parse-tool-event";
 import type { ConversationTurn, ConversationToolCall, TurnError } from "@/app/api/chat/activity/route";
 import type { BusEvent } from "@/lib/event-bus";
 
@@ -256,46 +257,33 @@ export function ChatPanel({
           const phase = (data.phase as string) ?? "";
           if (phase === "end") run.agentEnded = true;
         } else if (stream === "tool") {
-          const toolName =
-            ((data.tool_name ?? data.name ?? data.tool) as string) ?? "tool";
-          const toolUseId =
-            ((data.tool_use_id ?? data.id ?? data.toolUseId) as string) ?? "";
-          const toolStatus = (data.status ?? data.state) as string | undefined;
-          const args = (data.args ?? data.input ?? data.params) as
-            | Record<string, unknown>
-            | undefined;
-          const result = data.result ?? data.output ?? null;
+          const t = parseToolEvent(data);
 
-          if (toolUseId) {
-            let existing = run.toolCalls.get(toolUseId);
+          if (t.toolUseId) {
+            let existing = run.toolCalls.get(t.toolUseId);
             if (!existing) {
               existing = {
-                id: toolUseId,
-                name: toolName,
-                arguments: args ?? {},
-                argsSummary: args
-                  ? formatArgsSummary(toolName, args)
+                id: t.toolUseId,
+                name: t.toolName,
+                arguments: t.args ?? {},
+                argsSummary: t.args
+                  ? formatArgsSummary(t.toolName, t.args)
                   : "",
                 result: null,
                 isError: false,
               };
-              run.toolCalls.set(toolUseId, existing);
+              run.toolCalls.set(t.toolUseId, existing);
             }
-            if (toolName && existing.name === "tool") {
-              existing.name = toolName;
+            if (t.toolName && existing.name === "tool") {
+              existing.name = t.toolName;
             }
-            if (args && !existing.argsSummary) {
-              existing.argsSummary = formatArgsSummary(existing.name, args);
+            if (t.args && !existing.argsSummary) {
+              existing.argsSummary = formatArgsSummary(existing.name, t.args);
             }
-            if (
-              toolStatus === "done" ||
-              toolStatus === "complete" ||
-              toolStatus === "completed" ||
-              result != null
-            ) {
-              if (result != null) existing.result = result;
+            if (isToolComplete(t.status, t.result)) {
+              if (t.result != null) existing.result = t.result;
             }
-            if ((data.isError as boolean | undefined) === true) {
+            if (t.isError) {
               existing.isError = true;
             }
           }

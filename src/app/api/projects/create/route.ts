@@ -196,7 +196,7 @@ export async function POST(req: NextRequest) {
       try {
         refreshGsdWatchers();
 
-        const deadline = Date.now() + 30_000;
+        const deadline = Date.now() + 60_000;
         let connected = false;
         while (Date.now() < deadline) {
           const state = getIngestorState();
@@ -211,7 +211,7 @@ export async function POST(req: NextRequest) {
           send({ step: 5, status: "success" });
         } else {
           // Timeout is soft — project was created successfully
-          send({ step: 5, status: "success", label: "Waiting for gateway (timed out)" });
+          send({ step: 5, status: "success", label: "Gateway still starting (project ready)" });
         }
       } catch (err) {
         // Non-fatal — project exists regardless

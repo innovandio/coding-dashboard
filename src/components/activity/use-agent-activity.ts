@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { formatArgsSummary, truncate } from "@/lib/format-args";
+import { parseToolEvent, isToolComplete } from "@/lib/parse-tool-event";
 import type { BusEvent } from "@/lib/event-bus";
 
 // --- Types ---
@@ -117,16 +118,11 @@ export function useAgentActivity(events: BusEvent[]): AgentActivityState {
         }
 
         case "tool": {
-          const toolName = (data.tool_name ?? data.name ?? data.tool) as string | undefined;
-          const toolUseId = (data.tool_use_id ?? data.id ?? data.toolUseId) as string | undefined;
-          const toolStatus = (data.status ?? data.state) as string | undefined;
-          const args = (data.args ?? data.input ?? data.params) as Record<string, unknown> | undefined;
-          const result = data.result ?? data.output ?? null;
+          const t = parseToolEvent(data);
           const text = extractText(data);
 
           // Use toolUseId if available, otherwise generate a synthetic one
-          const effectiveId = toolUseId ?? `tool-${++toolSeq}`;
-          const effectiveName = toolName ?? "tool";
+          const effectiveId = t.toolUseId || `tool-${++toolSeq}`;
 
           const mapKey = `${runId}:${effectiveId}`;
           let existing = toolMap.get(mapKey);
@@ -134,9 +130,9 @@ export function useAgentActivity(events: BusEvent[]): AgentActivityState {
             existing = {
               kind: "tool",
               id: effectiveId,
-              name: effectiveName,
-              argsSummary: args
-                ? formatArgsSummary(effectiveName, args)
+              name: t.toolName,
+              argsSummary: t.args
+                ? formatArgsSummary(t.toolName, t.args)
                 : text
                   ? truncate(text, 80)
                   : "",
@@ -148,17 +144,17 @@ export function useAgentActivity(events: BusEvent[]): AgentActivityState {
             run.items.push(existing);
           }
           // Update with new info
-          if (toolName && existing.name === "tool") {
-            existing.name = toolName;
+          if (t.toolName && existing.name === "tool") {
+            existing.name = t.toolName;
           }
-          if (args && !existing.argsSummary) {
-            existing.argsSummary = formatArgsSummary(existing.name, args);
+          if (t.args && !existing.argsSummary) {
+            existing.argsSummary = formatArgsSummary(existing.name, t.args);
           }
-          if (toolStatus === "done" || toolStatus === "complete" || toolStatus === "completed" || result != null) {
+          if (isToolComplete(t.status, t.result)) {
             existing.status = "done";
           }
-          if (result != null) {
-            existing.result = result;
+          if (t.result != null) {
+            existing.result = t.result;
           }
           break;
         }

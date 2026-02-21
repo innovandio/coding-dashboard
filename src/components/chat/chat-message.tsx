@@ -1,13 +1,12 @@
 "use client";
 
+export { proseClasses } from "@/lib/styles";
+
 export interface ChatMessageData {
   id: string;
   role: "user";
   content: string;
 }
-
-export const proseClasses =
-  "prose prose-invert max-w-none text-xs [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_pre]:bg-black/20 [&_pre]:rounded [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre]:text-[0.7rem] [&_code]:text-[0.7rem] [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_h1]:text-sm [&_h2]:text-xs [&_h3]:text-xs [&_h1]:mt-3 [&_h2]:mt-2 [&_h3]:mt-2 [&_h1]:mb-1 [&_h2]:mb-1 [&_h3]:mb-1 [&_table]:text-xs [&_table]:border-collapse [&_table]:w-full [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:bg-muted/50 [&_th]:text-left [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1";
 
 export function ChatMessage({ message }: { message: ChatMessageData }) {
   return (

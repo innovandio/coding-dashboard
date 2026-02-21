@@ -119,6 +119,7 @@ export async function writeCustomProviderConfig(params: {
     providers: {
       [provider]: {
         baseUrl,
+        apiKey,
         api,
         models: [{
           id: modelId,
@@ -133,29 +134,12 @@ export async function writeCustomProviderConfig(params: {
     },
   }, null, 2);
 
-  const authProfilesJson = JSON.stringify({
-    version: 1,
-    profiles: {
-      [`${provider}:manual`]: {
-        type: "api_key",
-        provider,
-        key: apiKey,
-      },
-    },
-  }, null, 2);
-
-  // Write both files via base64 pipe
+  // Write models.json (with inline apiKey) via base64 pipe
   const modelsB64 = Buffer.from(modelsJson).toString("base64");
-  const authB64 = Buffer.from(authProfilesJson).toString("base64");
 
   await execFileAsync("docker", [
     "compose", "exec", "-T", "openclaw-gateway",
     "sh", "-c", `echo '${modelsB64}' | base64 -d > '${dir}/models.json'`,
-  ]);
-
-  await execFileAsync("docker", [
-    "compose", "exec", "-T", "openclaw-gateway",
-    "sh", "-c", `echo '${authB64}' | base64 -d > '${dir}/auth-profiles.json'`,
   ]);
 
   // Set the custom model as default via openclaw config set
