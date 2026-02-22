@@ -75,7 +75,6 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
         send({ step: 2, status: "success" });
       } catch (err) {
         // Non-fatal — DB records are already gone
-        const message = err instanceof Error ? err.message : "Unknown error";
         console.warn(`[projects/delete] Failed to delete agent ${agentId}:`, err);
         send({ step: 2, status: "success", label: "Deleting agent from gateway (skipped)" });
       }

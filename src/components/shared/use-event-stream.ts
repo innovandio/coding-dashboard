@@ -9,7 +9,9 @@ export function useEventStream(
   onEvent: (ev: BusEvent) => void,
 ) {
   const onEventRef = useRef(onEvent);
-  onEventRef.current = onEvent;
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  });
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {

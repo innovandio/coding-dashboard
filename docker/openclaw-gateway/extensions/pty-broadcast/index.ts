@@ -72,6 +72,7 @@ async function wrapNodePty() {
 
   const originalSpawn = ptyModule.spawn.bind(ptyModule);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- node-pty spawn options are untyped
   ptyModule.spawn = function (file: string, args: string[] | string, opts: any) {
     // Consume the agent context captured by the before_tool_call hook.
     const captured = pendingMeta;
@@ -149,6 +150,7 @@ async function wrapNodePty() {
 }
 
 export default function register(api: OpenClawPluginApi) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- OpenClaw plugin API opts are untyped
   let broadcast: ((event: string, payload: unknown, opts?: any) => void) | null = null;
 
   function activateBroadcast(broadcastFn: typeof broadcast) {

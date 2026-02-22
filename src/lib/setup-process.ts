@@ -11,7 +11,7 @@ import { promisify } from "util";
 import fs from "fs";
 import path from "path";
 import { invalidateNeedsSetupCache, restartIngestor } from "./gateway-ingestor";
-import { startLogin, getLoginEmitter, getLoginState, resetLogin } from "./claude-login-process";
+import { startLogin, getLoginEmitter, resetLogin } from "./claude-login-process";
 
 const execFileAsync = promisify(execFile);
 

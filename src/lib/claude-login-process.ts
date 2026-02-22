@@ -234,10 +234,10 @@ export function isLoginOrphaned(): boolean {
   return false;
 }
 
-export function writeLoginInput(_data: string): void {
+export function writeLoginInput(): void {
   // No-op: stdin-based input is no longer used
 }
 
-export function submitOAuthCode(_code: string): { ok: boolean; error?: string } {
+export function submitOAuthCode(): { ok: boolean; error?: string } {
   return { ok: false, error: "Use the callback-based flow instead" };
 }

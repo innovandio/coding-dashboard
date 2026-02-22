@@ -65,25 +65,6 @@ function savePingBackSettings(projectId: string, settings: { enabled: boolean; m
   });
 }
 
-async function sendPingBack(projectId: string, message: string) {
-  try {
-    const sessionRes = await fetch("/api/chat/session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId }),
-    });
-    if (!sessionRes.ok) return;
-    const { sessionId, sessionKey } = await sessionRes.json();
-    await fetch("/api/chat/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId, sessionKey, message }),
-    });
-  } catch (err) {
-    console.error("[ping-back] Failed to send:", err);
-  }
-}
-
 export function PtyPanel({
   projectId,
   onThinkingChange,

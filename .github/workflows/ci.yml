@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, Format, Type Check & Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm build
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          GATEWAY_WS_URL: ws://localhost:18789
+          GATEWAY_TOKEN: ci-dummy-token
+
+  secrets:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install detect-secrets
+      - name: Check for new secrets
+        run: |
+          detect-secrets scan --baseline .secrets.baseline
+          git diff -I generated_at --exit-code .secrets.baseline

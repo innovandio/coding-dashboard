@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChatMessage, type ChatMessageData } from "./chat-message";
+import { ChatMessage } from "./chat-message";
 import { AssistantTurn } from "./assistant-turn";
 import { LifecycleBanner } from "./lifecycle-banner";
 import { ChatInput } from "./chat-input";
@@ -117,7 +117,7 @@ export function ChatPanel({ projectId, events }: { projectId: string | null; eve
   }, [projectId]);
 
   // Track when history was last fetched so we only overlay genuinely new live items
-  const historyFetchedAt = useRef<number>(0);
+  const [historyFetchedAt, setHistoryFetchedAt] = useState(0);
 
   // Fetch structured turns from Gateway history
   const fetchTurns = useCallback(async () => {
@@ -127,7 +127,7 @@ export function ChatPanel({ projectId, events }: { projectId: string | null; eve
       if (!res.ok) return;
       const data = await res.json();
       setHistoryTurns(data.turns ?? []);
-      historyFetchedAt.current = Date.now();
+      setHistoryFetchedAt(Date.now());
     } catch {
       // History fetch failures are expected during connection setup
     }
@@ -369,7 +369,7 @@ export function ChatPanel({ projectId, events }: { projectId: string | null; eve
       }
       if (item.type === "user") {
         // Skip messages from before the last history fetch
-        if (item.ts && item.ts < historyFetchedAt.current) continue;
+        if (item.ts && item.ts < historyFetchedAt) continue;
         const text = item.text.trim();
         const alreadyInHistory = items.some((h) => h.type === "user" && h.text.includes(text));
         if (alreadyInHistory) continue;
@@ -377,7 +377,7 @@ export function ChatPanel({ projectId, events }: { projectId: string | null; eve
       items.push(item);
     }
     return items;
-  }, [historyTurns, liveItems]);
+  }, [historyTurns, liveItems, historyFetchedAt]);
 
   const isStreaming = liveItems.some((item) => item.type === "assistant" && item.isStreaming);
 
@@ -387,9 +387,10 @@ export function ChatPanel({ projectId, events }: { projectId: string | null; eve
   );
 
   // Auto-scroll
+  const lastItem = allItems[allItems.length - 1];
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [allItems.length, allItems[allItems.length - 1]]);
+  }, [allItems.length, lastItem]);
 
   const handleSend = useCallback(
     async (message: string) => {
