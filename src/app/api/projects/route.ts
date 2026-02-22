@@ -15,9 +15,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const pool = getPool();
-  const result = await pool.query(
-    `SELECT * FROM projects ORDER BY created_at DESC`
-  );
+  const result = await pool.query(`SELECT * FROM projects ORDER BY created_at DESC`);
   return NextResponse.json(result.rows);
 }
 
@@ -26,10 +24,7 @@ export async function POST(req: NextRequest) {
   const { id, agent_id, name, workspace_path } = body;
 
   if (!id || !agent_id || !name) {
-    return NextResponse.json(
-      { error: "id, agent_id, and name are required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "id, agent_id, and name are required" }, { status: 400 });
   }
 
   const resolvedPath = workspace_path ? expandTilde(workspace_path) : null;
@@ -39,7 +34,7 @@ export async function POST(req: NextRequest) {
     `INSERT INTO projects (id, agent_id, name, workspace_path)
      VALUES ($1, $2, $3, $4)
      ON CONFLICT (id) DO UPDATE SET name = $3, workspace_path = $4`,
-    [id, agent_id, name, resolvedPath]
+    [id, agent_id, name, resolvedPath],
   );
 
   // Regenerate workspace volume mounts and recreate the gateway container.

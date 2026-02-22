@@ -5,10 +5,10 @@ const execFileAsync = promisify(execFile);
 
 export interface HeartbeatConfig {
   enabled: boolean;
-  every: string;            // "30m", "1h", etc.
+  every: string; // "30m", "1h", etc.
   activeHoursStart: string; // "HH:MM" or ""
-  activeHoursEnd: string;   // "HH:MM" or ""
-  prompt: string;           // custom prompt or "" for default
+  activeHoursEnd: string; // "HH:MM" or ""
+  prompt: string; // custom prompt or "" for default
 }
 
 export function defaultHeartbeatConfig(): HeartbeatConfig {
@@ -29,8 +29,13 @@ export function defaultHeartbeatConfig(): HeartbeatConfig {
 export async function readHeartbeatConfig(agentId: string): Promise<HeartbeatConfig> {
   try {
     const { stdout } = await execFileAsync("docker", [
-      "compose", "exec", "-T", "openclaw-gateway",
-      "sh", "-c", `node -e "
+      "compose",
+      "exec",
+      "-T",
+      "openclaw-gateway",
+      "sh",
+      "-c",
+      `node -e "
         const fs = require('fs');
         const f = process.env.HOME + '/.openclaw/openclaw.json';
         const d = JSON.parse(fs.readFileSync(f, 'utf8'));
@@ -60,11 +65,19 @@ export async function readHeartbeatConfig(agentId: string): Promise<HeartbeatCon
  * If enabled=false, removes the heartbeat key entirely.
  * Uses base64-encoded JSON env var to avoid shell escaping issues.
  */
-export async function writeHeartbeatConfig(agentId: string, config: HeartbeatConfig): Promise<void> {
+export async function writeHeartbeatConfig(
+  agentId: string,
+  config: HeartbeatConfig,
+): Promise<void> {
   const payload = Buffer.from(JSON.stringify(config)).toString("base64");
   await execFileAsync("docker", [
-    "compose", "exec", "-T", "openclaw-gateway",
-    "sh", "-c", `HB_PAYLOAD="${payload}" node -e "
+    "compose",
+    "exec",
+    "-T",
+    "openclaw-gateway",
+    "sh",
+    "-c",
+    `HB_PAYLOAD="${payload}" node -e "
       const fs = require('fs');
       const f = process.env.HOME + '/.openclaw/openclaw.json';
       const d = JSON.parse(fs.readFileSync(f, 'utf8'));

@@ -19,6 +19,7 @@ Prerequisites: Docker, Docker Compose, tmux, pnpm 10.27.0.
 ## Architecture
 
 ### Stack
+
 - **Next.js 16** (App Router) with React 19, TypeScript strict mode
 - **UI:** shadcn/ui (New York style, RSC mode), Tailwind CSS 4, Radix UI, Lucide icons
 - **Database:** PostgreSQL 17 (raw `pg` queries, no ORM) — tables: `projects`, `sessions`
@@ -27,6 +28,7 @@ Prerequisites: Docker, Docker Compose, tmux, pnpm 10.27.0.
 - **3D:** Three.js for AI brain sphere visualization
 
 ### Path alias
+
 `@/*` maps to `./src/*`
 
 ### Key Architectural Layers
@@ -44,6 +46,7 @@ Prerequisites: Docker, Docker Compose, tmux, pnpm 10.27.0.
 ### API Routes (`src/app/api/`)
 
 All routes use `export const dynamic = "force-dynamic"`. Key groups:
+
 - `/api/projects` — CRUD for projects (scaffolds agent template files on create)
 - `/api/chat/*` — Send messages, get activity, abort, resolve sessions
 - `/api/pty/*` — Stream terminal output (SSE), send input, kill, resize

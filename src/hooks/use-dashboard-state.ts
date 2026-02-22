@@ -89,18 +89,21 @@ export function useDashboardState() {
   }, []);
 
   // SSE event stream
-  const handleEvent = useCallback((ev: BusEvent) => {
-    // When a gsd_update event arrives, trigger an immediate re-fetch of tasks
-    if (ev.event_type === "gsd_update") {
-      setGsdUpdateTrigger((n) => n + 1);
-      return;
-    }
+  const handleEvent = useCallback(
+    (ev: BusEvent) => {
+      // When a gsd_update event arrives, trigger an immediate re-fetch of tasks
+      if (ev.event_type === "gsd_update") {
+        setGsdUpdateTrigger((n) => n + 1);
+        return;
+      }
 
-    pendingEventsRef.current.push(ev);
-    if (rafRef.current === null) {
-      rafRef.current = requestAnimationFrame(flushEvents);
-    }
-  }, [flushEvents]);
+      pendingEventsRef.current.push(ev);
+      if (rafRef.current === null) {
+        rafRef.current = requestAnimationFrame(flushEvents);
+      }
+    },
+    [flushEvents],
+  );
 
   useEventStream(selectedProjectId, selectedSessionId, handleEvent);
 
@@ -137,7 +140,9 @@ export function useDashboardState() {
     sessionsAbortRef.current = controller;
     setLoadingSessions(true);
     try {
-      const res = await fetch(`/api/projects/${selectedProjectId}/sessions`, { signal: controller.signal });
+      const res = await fetch(`/api/projects/${selectedProjectId}/sessions`, {
+        signal: controller.signal,
+      });
       if (!res.ok) throw new Error("Failed to load sessions");
       const data = await res.json();
       setSessions(data);

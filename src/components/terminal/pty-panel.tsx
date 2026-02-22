@@ -36,7 +36,9 @@ function sendPtyResize(cols: number, rows: number) {
   });
 }
 
-async function fetchPingBackSettings(projectId: string): Promise<{ enabled: boolean; message: string }> {
+async function fetchPingBackSettings(
+  projectId: string,
+): Promise<{ enabled: boolean; message: string }> {
   try {
     const res = await fetch(`/api/projects/${projectId}`);
     if (!res.ok) return { enabled: false, message: DEFAULT_PING_MESSAGE };
@@ -55,7 +57,9 @@ function savePingBackSettings(projectId: string, settings: { enabled: boolean; m
   fetch(`/api/projects/${projectId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ meta: { pingback_enabled: settings.enabled, pingback_message: settings.message } }),
+    body: JSON.stringify({
+      meta: { pingback_enabled: settings.enabled, pingback_message: settings.message },
+    }),
   }).catch(() => {
     toast.error("Failed to save ping-back settings");
   });
@@ -87,7 +91,8 @@ export function PtyPanel({
   projectId: string | null;
   onThinkingChange?: (thinking: boolean) => void;
 }) {
-  const { setTerminal, connected, hasActivity, allRuns, selectedRunId, selectRun, sendInput } = usePtyStream(projectId);
+  const { setTerminal, connected, hasActivity, allRuns, selectedRunId, selectRun, sendInput } =
+    usePtyStream(projectId);
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<import("@xterm/addon-fit").FitAddon | null>(null);
@@ -113,7 +118,9 @@ export function PtyPanel({
       setPingBackMessage(settings.message);
       setDraftMessage(settings.message);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [projectId]);
 
   // Notify parent about thinking/activity state
@@ -123,10 +130,7 @@ export function PtyPanel({
 
   // Resize PTY when new processes appear — they're spawned at gateway
   // default dimensions which may differ from the browser terminal.
-  const activeCount = useMemo(
-    () => allRuns.filter((r) => r.active).length,
-    [allRuns],
-  );
+  const activeCount = useMemo(() => allRuns.filter((r) => r.active).length, [allRuns]);
 
   useEffect(() => {
     const t = terminalRef.current;
@@ -135,12 +139,15 @@ export function PtyPanel({
     }
   }, [activeCount]);
 
-  const handlePingBackToggle = useCallback((checked: boolean) => {
-    setPingBackEnabled(checked);
-    if (projectId) {
-      savePingBackSettings(projectId, { enabled: checked, message: pingBackMessage });
-    }
-  }, [projectId, pingBackMessage]);
+  const handlePingBackToggle = useCallback(
+    (checked: boolean) => {
+      setPingBackEnabled(checked);
+      if (projectId) {
+        savePingBackSettings(projectId, { enabled: checked, message: pingBackMessage });
+      }
+    },
+    [projectId, pingBackMessage],
+  );
 
   const handleSaveMessage = useCallback(() => {
     setPingBackMessage(draftMessage);
@@ -243,7 +250,10 @@ export function PtyPanel({
           )}
           {allRuns.length > 0 && (
             <Select value={selectedRunId ?? undefined} onValueChange={selectRun}>
-              <SelectTrigger size="sm" className="!h-4 text-[10px] border-0 bg-transparent shadow-none gap-1 px-1.5 min-w-0 w-auto !py-0">
+              <SelectTrigger
+                size="sm"
+                className="!h-4 text-[10px] border-0 bg-transparent shadow-none gap-1 px-1.5 min-w-0 w-auto !py-0"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -311,7 +321,15 @@ export function PtyPanel({
             )}
             <ConnectionDot
               status={connected ? "connected" : projectId ? "connecting" : "disconnected"}
-              label={connected ? (hasActivity ? "Streaming" : "Connected") : projectId ? "Connecting..." : "No session"}
+              label={
+                connected
+                  ? hasActivity
+                    ? "Streaming"
+                    : "Connected"
+                  : projectId
+                    ? "Connecting..."
+                    : "No session"
+              }
             />
           </div>
         </CardTitle>
@@ -323,12 +341,7 @@ export function PtyPanel({
               No project selected
             </p>
           )}
-          {projectId && (
-            <div
-              ref={containerRef}
-              className="h-full w-full px-1 py-1"
-            />
-          )}
+          {projectId && <div ref={containerRef} className="h-full w-full px-1 py-1" />}
         </div>
       </CardContent>
     </Card>

@@ -5,11 +5,7 @@ import { homedir } from "os";
 import { cp } from "fs/promises";
 import { getPool } from "@/lib/db";
 import { refreshGsdWatchers, getIngestorState } from "@/lib/gateway-ingestor";
-import {
-  agentDir,
-  scaffoldAgentFiles,
-  syncGatewayMounts,
-} from "@/lib/agent-scaffold";
+import { agentDir, scaffoldAgentFiles, syncGatewayMounts } from "@/lib/agent-scaffold";
 import { sendGatewayRequest } from "@/lib/gateway-ingestor";
 import { createProgressStream } from "@/lib/ndjson-stream";
 import { setDefaultModel, pasteAuthToken, writeCustomProviderConfig } from "@/lib/model-providers";
@@ -29,10 +25,10 @@ export async function POST(req: NextRequest) {
   const { agentId, name, workspace, basedOn, modelConfig, heartbeatConfig } = await req.json();
 
   if (!agentId || !name || !workspace) {
-    return new Response(
-      JSON.stringify({ error: "agentId, name, and workspace are required" }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: "agentId, name, and workspace are required" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   const { stream, send, close } = createProgressStream();
@@ -46,22 +42,35 @@ export async function POST(req: NextRequest) {
         const containerProjectDir = `/projects/${agentId}`;
         const agentDirPath = agentDir(agentId);
         const runArgs = [
-          "compose", "run", "--rm", "-T",
-          "-v", `${workspace}:${containerProjectDir}`,
+          "compose",
+          "run",
+          "--rm",
+          "-T",
+          "-v",
+          `${workspace}:${containerProjectDir}`,
           "openclaw-gateway",
         ];
 
         await execFileAsync("docker", [
-          "compose", "exec", "openclaw-gateway",
-          "mkdir", "-p", agentDirPath,
+          "compose",
+          "exec",
+          "openclaw-gateway",
+          "mkdir",
+          "-p",
+          agentDirPath,
         ]);
 
         try {
           await execFileAsync("docker", [
             ...runArgs,
-            "openclaw", "agents", "add", agentId,
-            "--workspace", agentDirPath,
-            "--agent-dir", agentDirPath,
+            "openclaw",
+            "agents",
+            "add",
+            agentId,
+            "--workspace",
+            agentDirPath,
+            "--agent-dir",
+            agentDirPath,
             "--non-interactive",
           ]);
         } catch (addErr) {
@@ -69,13 +78,22 @@ export async function POST(req: NextRequest) {
           if (msg.includes("already exists")) {
             await execFileAsync("docker", [
               ...runArgs,
-              "openclaw", "agents", "delete", agentId, "--force",
+              "openclaw",
+              "agents",
+              "delete",
+              agentId,
+              "--force",
             ]);
             await execFileAsync("docker", [
               ...runArgs,
-              "openclaw", "agents", "add", agentId,
-              "--workspace", agentDirPath,
-              "--agent-dir", agentDirPath,
+              "openclaw",
+              "agents",
+              "add",
+              agentId,
+              "--workspace",
+              agentDirPath,
+              "--agent-dir",
+              agentDirPath,
               "--non-interactive",
             ]);
           } else {
@@ -119,7 +137,7 @@ export async function POST(req: NextRequest) {
           `INSERT INTO projects (id, agent_id, name, workspace_path)
            VALUES ($1, $2, $3, $4)
            ON CONFLICT (id) DO UPDATE SET name = $3, workspace_path = $4`,
-          [agentId, agentId, name, resolvedPath]
+          [agentId, agentId, name, resolvedPath],
         );
         send({ step: 1, status: "success" });
       } catch (err) {
@@ -161,9 +179,10 @@ export async function POST(req: NextRequest) {
       }
 
       // Step 4: Configure model (if provided)
-      const hasModelConfig = modelConfig?.mode === "custom"
-        ? !!(modelConfig?.customProvider && modelConfig?.customModelId && modelConfig?.apiKey)
-        : !!(modelConfig?.provider && modelConfig?.modelKey && modelConfig?.apiKey);
+      const hasModelConfig =
+        modelConfig?.mode === "custom"
+          ? !!(modelConfig?.customProvider && modelConfig?.customModelId && modelConfig?.apiKey)
+          : !!(modelConfig?.provider && modelConfig?.modelKey && modelConfig?.apiKey);
 
       if (hasModelConfig) {
         send({ step: 4, status: "processing", label: "Configuring model" });
@@ -195,14 +214,21 @@ export async function POST(req: NextRequest) {
         try {
           const agentDirPath = agentDir(agentId);
           await execFileAsync("docker", [
-            "compose", "exec", "-T", "openclaw-gateway",
-            "sh", "-c",
-            `src="/root/.openclaw/agents/main/agent/models.json"; `
-            + `[ -f "$src" ] && cp "$src" "${agentDirPath}/models.json" && echo "copied" || echo "no-src"`,
+            "compose",
+            "exec",
+            "-T",
+            "openclaw-gateway",
+            "sh",
+            "-c",
+            `src="/root/.openclaw/agents/main/agent/models.json"; ` +
+              `[ -f "$src" ] && cp "$src" "${agentDirPath}/models.json" && echo "copied" || echo "no-src"`,
           ]);
           send({ step: 4, status: "success" });
         } catch (err) {
-          console.warn("[projects/create] Model inherit error:", err instanceof Error ? err.message : err);
+          console.warn(
+            "[projects/create] Model inherit error:",
+            err instanceof Error ? err.message : err,
+          );
           send({ step: 4, status: "success", label: "Inheriting global model (skipped)" });
         }
       }

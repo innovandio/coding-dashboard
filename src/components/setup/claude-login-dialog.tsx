@@ -48,8 +48,7 @@ export function ClaudeLoginDialog({
         <DialogHeader>
           <DialogTitle className="text-sm">Claude Code Login</DialogTitle>
           <DialogDescription className="text-xs">
-            Claude Code needs to be signed in to an Anthropic account to
-            function.
+            Claude Code needs to be signed in to an Anthropic account to function.
           </DialogDescription>
         </DialogHeader>
 
@@ -57,16 +56,12 @@ export function ClaudeLoginDialog({
           {loginState === "exited" && exitCode === 0 ? (
             <>
               <CheckCircle2 className="h-10 w-10 text-green-500" />
-              <p className="text-sm text-muted-foreground">
-                Login successful. Closing...
-              </p>
+              <p className="text-sm text-muted-foreground">Login successful. Closing...</p>
             </>
           ) : loginState === "exited" ? (
             <>
               <XCircle className="h-10 w-10 text-destructive" />
-              <p className="text-sm text-muted-foreground">
-                Login failed. Please try again.
-              </p>
+              <p className="text-sm text-muted-foreground">Login failed. Please try again.</p>
             </>
           ) : loginState === "exchanging" ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -80,8 +75,7 @@ export function ClaudeLoginDialog({
                 Sign in with Claude
               </Button>
               <p className="text-xs text-muted-foreground text-center">
-                Sign in and authorize access. You&apos;ll be redirected back
-                automatically.
+                Sign in and authorize access. You&apos;ll be redirected back automatically.
               </p>
             </>
           ) : (

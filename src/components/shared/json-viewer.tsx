@@ -2,15 +2,7 @@
 
 import { useState } from "react";
 
-function JsonNode({
-  name,
-  value,
-  depth,
-}: {
-  name?: string;
-  value: unknown;
-  depth: number;
-}) {
+function JsonNode({ name, value, depth }: { name?: string; value: unknown; depth: number }) {
   const [expanded, setExpanded] = useState(depth < 2);
 
   if (value === null || value === undefined) {
@@ -32,14 +24,10 @@ function JsonNode({
         >
           <span className="text-xs">{expanded ? "▼" : "▶"}</span>
           {name && <span className="text-blue-400">{name}</span>}
-          <span className="text-muted-foreground text-xs">
-            {`{${entries.length}}`}
-          </span>
+          <span className="text-muted-foreground text-xs">{`{${entries.length}}`}</span>
         </button>
         {expanded &&
-          entries.map(([k, v]) => (
-            <JsonNode key={k} name={k} value={v} depth={depth + 1} />
-          ))}
+          entries.map(([k, v]) => <JsonNode key={k} name={k} value={v} depth={depth + 1} />)}
       </div>
     );
   }
@@ -53,9 +41,7 @@ function JsonNode({
         >
           <span className="text-xs">{expanded ? "▼" : "▶"}</span>
           {name && <span className="text-blue-400">{name}</span>}
-          <span className="text-muted-foreground text-xs">
-            [{value.length}]
-          </span>
+          <span className="text-muted-foreground text-xs">[{value.length}]</span>
         </button>
         {expanded &&
           value.map((item, i) => (

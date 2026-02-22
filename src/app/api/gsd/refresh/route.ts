@@ -9,17 +9,11 @@ export async function POST(req: NextRequest) {
   const { project_id } = body;
 
   if (!project_id) {
-    return NextResponse.json(
-      { error: "project_id is required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "project_id is required" }, { status: 400 });
   }
 
   const pool = getPool();
-  const project = await pool.query(
-    `SELECT * FROM projects WHERE id = $1`,
-    [project_id]
-  );
+  const project = await pool.query(`SELECT * FROM projects WHERE id = $1`, [project_id]);
 
   if (project.rows.length === 0) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
@@ -29,7 +23,7 @@ export async function POST(req: NextRequest) {
   if (!workspacePath) {
     return NextResponse.json(
       { error: "Project has no workspace_path configured" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 

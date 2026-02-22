@@ -20,7 +20,9 @@ export async function GET(req: Request) {
         });
         try {
           controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-        } catch { /* stream closed */ }
+        } catch {
+          /* stream closed */
+        }
       };
 
       const onStarted = (payload: Record<string, unknown>) => {
@@ -34,7 +36,9 @@ export async function GET(req: Request) {
         });
         try {
           controller.enqueue(encoder.encode(`event: started\ndata: ${data}\n\n`));
-        } catch { /* stream closed */ }
+        } catch {
+          /* stream closed */
+        }
       };
 
       const onExited = (payload: Record<string, unknown>) => {
@@ -46,7 +50,9 @@ export async function GET(req: Request) {
         });
         try {
           controller.enqueue(encoder.encode(`event: exited\ndata: ${data}\n\n`));
-        } catch { /* stream closed */ }
+        } catch {
+          /* stream closed */
+        }
       };
 
       // Register listeners BEFORE replaying buffers so that if a process
@@ -64,35 +70,48 @@ export async function GET(req: Request) {
           try {
             const meta = getRunMeta(runId);
             controller.enqueue(
-              encoder.encode(`event: started\ndata: ${JSON.stringify({
-                type: "started", runId, label: meta?.label, command: meta?.command,
-              })}\n\n`)
+              encoder.encode(
+                `event: started\ndata: ${JSON.stringify({
+                  type: "started",
+                  runId,
+                  label: meta?.label,
+                  command: meta?.command,
+                })}\n\n`,
+              ),
             );
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ runId, data })}\n\n`)
-            );
-          } catch { /* stream closed */ }
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ runId, data })}\n\n`));
+          } catch {
+            /* stream closed */
+          }
         }
       }
 
       // Reconcile: verify replayed runs are still active on the gateway.
       // If a pty.exited event was dropped, the buffer becomes stale.
       if (replayedRunIds.length > 0) {
-        sendGatewayRequest("pty.list").then((result) => {
-          const runs = (result as { runs?: Array<{ runId: string }> }).runs;
-          if (!runs) return;
-          const activeRunIds = new Set(runs.map((r) => r.runId));
-          for (const runId of replayedRunIds) {
-            if (!activeRunIds.has(runId)) {
-              deleteRunBuffer(runId);
-              try {
-                controller.enqueue(
-                  encoder.encode(`event: exited\ndata: ${JSON.stringify({ type: "exited", runId })}\n\n`)
-                );
-              } catch { /* stream closed */ }
+        sendGatewayRequest("pty.list")
+          .then((result) => {
+            const runs = (result as { runs?: Array<{ runId: string }> }).runs;
+            if (!runs) return;
+            const activeRunIds = new Set(runs.map((r) => r.runId));
+            for (const runId of replayedRunIds) {
+              if (!activeRunIds.has(runId)) {
+                deleteRunBuffer(runId);
+                try {
+                  controller.enqueue(
+                    encoder.encode(
+                      `event: exited\ndata: ${JSON.stringify({ type: "exited", runId })}\n\n`,
+                    ),
+                  );
+                } catch {
+                  /* stream closed */
+                }
+              }
             }
-          }
-        }).catch(() => { /* gateway unavailable */ });
+          })
+          .catch(() => {
+            /* gateway unavailable */
+          });
       }
 
       // Keepalive every 15s
@@ -109,7 +128,11 @@ export async function GET(req: Request) {
         emitter.off("pty.started", onStarted);
         emitter.off("pty.exited", onExited);
         clearInterval(keepalive);
-        try { controller.close(); } catch { /* already closed */ }
+        try {
+          controller.close();
+        } catch {
+          /* already closed */
+        }
       });
     },
   });

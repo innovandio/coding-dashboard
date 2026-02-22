@@ -38,10 +38,7 @@ function stripBold(text: string): string {
   return text.replace(/\*\*/g, "");
 }
 
-async function parseTaskFile(
-  filePath: string,
-  projectId: string
-): Promise<GsdTask[]> {
+async function parseTaskFile(filePath: string, projectId: string): Promise<GsdTask[]> {
   let content: string;
   try {
     content = await readFile(filePath, "utf-8");
@@ -114,10 +111,7 @@ async function parseTaskFile(
   return tasks;
 }
 
-export async function parseGsdFiles(
-  workspacePath: string,
-  projectId: string
-): Promise<GsdTask[]> {
+export async function parseGsdFiles(workspacePath: string, projectId: string): Promise<GsdTask[]> {
   const candidates = [
     "STATE.md",
     "PLAN.md",

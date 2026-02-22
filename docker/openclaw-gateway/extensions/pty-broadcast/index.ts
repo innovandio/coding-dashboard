@@ -1,9 +1,6 @@
 import { createRequire } from "node:module";
 import { EventEmitter } from "node:events";
-import type {
-  OpenClawPluginApi,
-  GatewayRequestHandlerOptions,
-} from "openclaw/plugin-sdk";
+import type { OpenClawPluginApi, GatewayRequestHandlerOptions } from "openclaw/plugin-sdk";
 
 /**
  * pty-broadcast plugin
@@ -105,19 +102,31 @@ async function wrapNodePty() {
         end: () => {
           try {
             ptyHandle.write("\x04"); // Ctrl+D / EOF
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         },
       },
       cancel: () => {
-        try { ptyHandle.kill(); } catch { /* ignore */ }
+        try {
+          ptyHandle.kill();
+        } catch {
+          /* ignore */
+        }
       },
       resize: (cols: number, rows: number) => {
-        try { ptyHandle.resize(cols, rows); } catch { /* ignore */ }
+        try {
+          ptyHandle.resize(cols, rows);
+        } catch {
+          /* ignore */
+        }
       },
     };
 
     activeRuns.set(runId, activeRun);
-    const command = Array.isArray(args) ? [file, ...args].join(" ") : `${file} ${args ?? ""}`.trim();
+    const command = Array.isArray(args)
+      ? [file, ...args].join(" ")
+      : `${file} ${args ?? ""}`.trim();
     ptyBus.emit("started", { ...meta, pid: ptyHandle.pid, command });
 
     ptyHandle.onData((data: string) => {
@@ -174,100 +183,88 @@ export default function register(api: OpenClawPluginApi) {
 
   // Send stdin data to a running PTY process.
   // params: { runId: string, data: string }
-  api.registerGatewayMethod(
-    "pty.input",
-    ({ params, respond }: GatewayRequestHandlerOptions) => {
-      const runId = params.runId as string | undefined;
-      const data = params.data as string | undefined;
+  api.registerGatewayMethod("pty.input", ({ params, respond }: GatewayRequestHandlerOptions) => {
+    const runId = params.runId as string | undefined;
+    const data = params.data as string | undefined;
 
-      if (!runId || typeof data !== "string") {
-        respond(false, undefined, { code: "INVALID_REQUEST", message: "runId and data required" });
-        return;
+    if (!runId || typeof data !== "string") {
+      respond(false, undefined, { code: "INVALID_REQUEST", message: "runId and data required" });
+      return;
+    }
+
+    const run = activeRuns.get(runId);
+    if (!run) {
+      respond(false, undefined, { code: "NOT_FOUND", message: `no active PTY run: ${runId}` });
+      return;
+    }
+
+    if (!run.stdin) {
+      respond(false, undefined, { code: "UNAVAILABLE", message: "PTY has no stdin" });
+      return;
+    }
+
+    run.stdin.write(data, (err) => {
+      if (err) {
+        respond(false, undefined, { code: "UNAVAILABLE", message: err.message });
+      } else {
+        respond(true, { written: true });
       }
-
-      const run = activeRuns.get(runId);
-      if (!run) {
-        respond(false, undefined, { code: "NOT_FOUND", message: `no active PTY run: ${runId}` });
-        return;
-      }
-
-      if (!run.stdin) {
-        respond(false, undefined, { code: "UNAVAILABLE", message: "PTY has no stdin" });
-        return;
-      }
-
-      run.stdin.write(data, (err) => {
-        if (err) {
-          respond(false, undefined, { code: "UNAVAILABLE", message: err.message });
-        } else {
-          respond(true, { written: true });
-        }
-      });
-    },
-  );
+    });
+  });
 
   // Terminate a running PTY process.
   // params: { runId: string }
-  api.registerGatewayMethod(
-    "pty.kill",
-    ({ params, respond }: GatewayRequestHandlerOptions) => {
-      const runId = params.runId as string | undefined;
+  api.registerGatewayMethod("pty.kill", ({ params, respond }: GatewayRequestHandlerOptions) => {
+    const runId = params.runId as string | undefined;
 
-      if (!runId) {
-        respond(false, undefined, { code: "INVALID_REQUEST", message: "runId required" });
-        return;
-      }
+    if (!runId) {
+      respond(false, undefined, { code: "INVALID_REQUEST", message: "runId required" });
+      return;
+    }
 
-      const run = activeRuns.get(runId);
-      if (!run) {
-        respond(false, undefined, { code: "NOT_FOUND", message: `no active PTY run: ${runId}` });
-        return;
-      }
+    const run = activeRuns.get(runId);
+    if (!run) {
+      respond(false, undefined, { code: "NOT_FOUND", message: `no active PTY run: ${runId}` });
+      return;
+    }
 
-      run.cancel("manual-cancel");
-      respond(true, { killed: true, runId });
-    },
-  );
+    run.cancel("manual-cancel");
+    respond(true, { killed: true, runId });
+  });
 
   // List active PTY processes.
-  api.registerGatewayMethod(
-    "pty.list",
-    ({ respond }: GatewayRequestHandlerOptions) => {
-      const runs = Array.from(activeRuns.values()).map((r) => ({
-        runId: r.meta.runId,
-        sessionId: r.meta.sessionId,
-        backendId: r.meta.backendId,
-        label: r.meta.label,
-        pid: r.pid,
-        hasStdin: Boolean(r.stdin),
-      }));
-      respond(true, { runs });
-    },
-  );
+  api.registerGatewayMethod("pty.list", ({ respond }: GatewayRequestHandlerOptions) => {
+    const runs = Array.from(activeRuns.values()).map((r) => ({
+      runId: r.meta.runId,
+      sessionId: r.meta.sessionId,
+      backendId: r.meta.backendId,
+      label: r.meta.label,
+      pid: r.pid,
+      hasStdin: Boolean(r.stdin),
+    }));
+    respond(true, { runs });
+  });
 
   // Resize all active PTY processes to match the client terminal dimensions.
   // params: { cols: number, rows: number }
-  api.registerGatewayMethod(
-    "pty.resize",
-    ({ params, respond }: GatewayRequestHandlerOptions) => {
-      const cols = params.cols as number | undefined;
-      const rows = params.rows as number | undefined;
+  api.registerGatewayMethod("pty.resize", ({ params, respond }: GatewayRequestHandlerOptions) => {
+    const cols = params.cols as number | undefined;
+    const rows = params.rows as number | undefined;
 
-      if (
-        typeof cols !== "number" || typeof rows !== "number" ||
-        cols < 1 || rows < 1
-      ) {
-        respond(false, undefined, { code: "INVALID_REQUEST", message: "cols and rows must be positive numbers" });
-        return;
-      }
+    if (typeof cols !== "number" || typeof rows !== "number" || cols < 1 || rows < 1) {
+      respond(false, undefined, {
+        code: "INVALID_REQUEST",
+        message: "cols and rows must be positive numbers",
+      });
+      return;
+    }
 
-      let resized = 0;
-      for (const run of activeRuns.values()) {
-        run.resize(cols, rows);
-        resized++;
-      }
+    let resized = 0;
+    for (const run of activeRuns.values()) {
+      run.resize(cols, rows);
+      resized++;
+    }
 
-      respond(true, { resized, cols, rows });
-    },
-  );
+    respond(true, { resized, cols, rows });
+  });
 }

@@ -6,7 +6,7 @@ import type { BusEvent } from "@/lib/event-bus";
 export function useEventStream(
   projectId: string | null,
   sessionId: string | null,
-  onEvent: (ev: BusEvent) => void
+  onEvent: (ev: BusEvent) => void,
 ) {
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;

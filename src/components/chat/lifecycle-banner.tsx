@@ -25,11 +25,7 @@ export function LifecycleBanner({
   }, [state, runStartedAt]);
 
   if (state === "idle") {
-    return (
-      <div className="px-3 py-1 mb-3 text-[10px] text-muted-foreground bg-muted/30">
-        Idle
-      </div>
-    );
+    return <div className="px-3 py-1 mb-3 text-[10px] text-muted-foreground bg-muted/30">Idle</div>;
   }
 
   if (state === "error") {

@@ -35,10 +35,7 @@ export function TopBar({
           {loading ? (
             <Skeleton className="h-9 w-48 rounded-r-none" />
           ) : projects.length > 0 ? (
-            <Select
-              value={selectedProjectId ?? projects[0].id}
-              onValueChange={onSelectProject}
-            >
+            <Select value={selectedProjectId ?? projects[0].id} onValueChange={onSelectProject}>
               <SelectTrigger className="w-48 text-xs rounded-r-none border-r-0">
                 <SelectValue />
               </SelectTrigger>

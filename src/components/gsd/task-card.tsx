@@ -15,7 +15,7 @@ export function TaskCard({ task }: { task: GsdTask }) {
     <div
       className={cn(
         "rounded-md border border-border bg-card p-2 border-l-2",
-        statusAccent[task.status] ?? "border-l-muted-foreground"
+        statusAccent[task.status] ?? "border-l-muted-foreground",
       )}
     >
       <p className="text-xs font-medium leading-tight">{task.title}</p>

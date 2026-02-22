@@ -16,7 +16,13 @@ export async function GET(req: Request) {
         if (filterProjectId && ev.project_id !== filterProjectId) return;
         // Allow chat events through even when session filter is active
         // (chat session ID differs from monitoring session)
-        if (filterSessionId && ev.session_id !== filterSessionId && ev.event_type !== "chat" && ev.event_type !== "agent") return;
+        if (
+          filterSessionId &&
+          ev.session_id !== filterSessionId &&
+          ev.event_type !== "chat" &&
+          ev.event_type !== "agent"
+        )
+          return;
 
         const data = JSON.stringify(ev);
         controller.enqueue(encoder.encode(`data: ${data}\n\n`));
@@ -37,7 +43,11 @@ export async function GET(req: Request) {
       req.signal.addEventListener("abort", () => {
         bus.off("event", onEvent);
         clearInterval(keepalive);
-        try { controller.close(); } catch { /* already closed */ }
+        try {
+          controller.close();
+        } catch {
+          /* already closed */
+        }
       });
     },
   });

@@ -12,7 +12,7 @@ export function LiveStream({ events }: { events: BusEvent[] }) {
 
   const agentEvents = useMemo(
     () => events.filter((e) => e.event_type === "agent" || e.source === "gateway"),
-    [events]
+    [events],
   );
 
   useEffect(() => {

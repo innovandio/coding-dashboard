@@ -23,7 +23,8 @@ const execFileAsync = promisify(execFile);
 const CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 const AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
 const TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
-const SCOPES = "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers";
+const SCOPES =
+  "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers";
 
 export type LoginState = "idle" | "awaiting_auth" | "exchanging" | "exited";
 
@@ -185,8 +186,12 @@ export async function handleCallback(
     // Write credentials into the container
     const credJson = JSON.stringify(credentials);
     await execFileAsync("docker", [
-      "compose", "exec", "-T", "openclaw-gateway",
-      "sh", "-c",
+      "compose",
+      "exec",
+      "-T",
+      "openclaw-gateway",
+      "sh",
+      "-c",
       `mkdir -p "$HOME/.claude" && cat > "$HOME/.claude/.credentials.json" << 'CREDENTIALS_EOF'
 ${credJson}
 CREDENTIALS_EOF

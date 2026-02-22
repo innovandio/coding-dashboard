@@ -38,7 +38,9 @@ export async function GET(req: Request) {
       });
       try {
         controller.enqueue(encoder.encode(`event: state\ndata: ${stateMsg}\n\n`));
-      } catch { /* closed */ }
+      } catch {
+        /* closed */
+      }
 
       // Replay OAuth URL if already available
       const oauthUrl = getLoginOAuthUrl();
@@ -47,7 +49,9 @@ export async function GET(req: Request) {
           controller.enqueue(
             encoder.encode(`event: oauth-url\ndata: ${JSON.stringify({ url: oauthUrl })}\n\n`),
           );
-        } catch { /* closed */ }
+        } catch {
+          /* closed */
+        }
       }
 
       // If already exited, send exit event immediately
@@ -58,25 +62,27 @@ export async function GET(req: Request) {
               `event: exit\ndata: ${JSON.stringify({ exitCode: getLoginExitCode() })}\n\n`,
             ),
           );
-        } catch { /* closed */ }
+        } catch {
+          /* closed */
+        }
       }
 
       const onState = (data: { state: string }) => {
         try {
-          controller.enqueue(
-            encoder.encode(`event: state\ndata: ${JSON.stringify(data)}\n\n`),
-          );
-        } catch { /* stream closed */ }
+          controller.enqueue(encoder.encode(`event: state\ndata: ${JSON.stringify(data)}\n\n`));
+        } catch {
+          /* stream closed */
+        }
       };
 
       const onExit = (exitCode: number) => {
         try {
           controller.enqueue(
-            encoder.encode(
-              `event: exit\ndata: ${JSON.stringify({ exitCode })}\n\n`,
-            ),
+            encoder.encode(`event: exit\ndata: ${JSON.stringify({ exitCode })}\n\n`),
           );
-        } catch { /* stream closed */ }
+        } catch {
+          /* stream closed */
+        }
       };
 
       const onOAuthUrl = (url: string) => {
@@ -84,7 +90,9 @@ export async function GET(req: Request) {
           controller.enqueue(
             encoder.encode(`event: oauth-url\ndata: ${JSON.stringify({ url })}\n\n`),
           );
-        } catch { /* stream closed */ }
+        } catch {
+          /* stream closed */
+        }
       };
 
       emitter.on("login:state", onState);
@@ -106,7 +114,9 @@ export async function GET(req: Request) {
         clearInterval(keepalive);
         try {
           controller.close();
-        } catch { /* already closed */ }
+        } catch {
+          /* already closed */
+        }
       });
     },
   });

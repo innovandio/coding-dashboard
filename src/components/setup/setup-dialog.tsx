@@ -117,11 +117,7 @@ export function SetupDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <ModelConfigForm
-            value={modelConfig}
-            onChange={setModelConfig}
-            disabled={configSaving}
-          />
+          <ModelConfigForm value={modelConfig} onChange={setModelConfig} disabled={configSaving} />
           <Button
             className="w-full"
             disabled={!isModelConfigValid(modelConfig) || configSaving}

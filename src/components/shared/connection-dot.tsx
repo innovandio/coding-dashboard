@@ -1,11 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type Status = "connected" | "connecting" | "disconnected" | "reconnecting" | "authenticating";
 
@@ -30,14 +26,16 @@ export function ConnectionDot({ status, label }: { status: Status; label?: strin
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="inline-flex items-center gap-1.5" role="status" aria-label={`Connection status: ${displayLabel}`}>
+        <span
+          className="inline-flex items-center gap-1.5"
+          role="status"
+          aria-label={`Connection status: ${displayLabel}`}
+        >
           <span
             aria-hidden="true"
             className={cn("h-2.5 w-2.5 rounded-full", colors[status] ?? colors.disconnected)}
           />
-          <span className="text-xs text-muted-foreground">
-            {displayLabel}
-          </span>
+          <span className="text-xs text-muted-foreground">{displayLabel}</span>
         </span>
       </TooltipTrigger>
       <TooltipContent>

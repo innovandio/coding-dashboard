@@ -10,10 +10,7 @@ const execFileAsync = promisify(execFile);
 
 export const dynamic = "force-dynamic";
 
-export async function POST(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { stream, send, close } = createProgressStream();
 
@@ -24,7 +21,7 @@ export async function POST(
       // Look up agent_id before deleting the row
       const { rows } = await pool.query<{ agent_id: string }>(
         `SELECT agent_id FROM projects WHERE id = $1`,
-        [id]
+        [id],
       );
       const agentId = rows[0]?.agent_id;
 
@@ -65,8 +62,15 @@ export async function POST(
       send({ step: 2, status: "processing", label: "Deleting agent from gateway" });
       try {
         await execFileAsync("docker", [
-          "compose", "exec", "openclaw-gateway",
-          "node", "openclaw.mjs", "agents", "delete", agentId, "--force",
+          "compose",
+          "exec",
+          "openclaw-gateway",
+          "node",
+          "openclaw.mjs",
+          "agents",
+          "delete",
+          agentId,
+          "--force",
         ]);
         send({ step: 2, status: "success" });
       } catch (err) {
@@ -101,7 +105,11 @@ export async function POST(
           }
           await new Promise((r) => setTimeout(r, 1000));
         }
-        send({ step: 4, status: "success", label: connected ? "Gateway connected" : "Gateway still starting (project deleted)" });
+        send({
+          step: 4,
+          status: "success",
+          label: connected ? "Gateway connected" : "Gateway still starting (project deleted)",
+        });
       } catch {
         send({ step: 4, status: "success", label: "Waiting for gateway (skipped)" });
       }

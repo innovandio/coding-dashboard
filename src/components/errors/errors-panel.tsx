@@ -10,8 +10,7 @@ import type { BusEvent } from "@/lib/event-bus";
 function isErrorEvent(ev: BusEvent): boolean {
   if (ev.event_type === "error" || ev.event_type === "failure") return true;
   const p = ev.payload;
-  if (typeof p.level === "string" && (p.level === "error" || p.level === "warn"))
-    return true;
+  if (typeof p.level === "string" && (p.level === "error" || p.level === "warn")) return true;
   if (typeof p.error === "string") return true;
   if (typeof p.ok === "boolean" && !p.ok) return true;
   return false;
@@ -35,9 +34,7 @@ export function ErrorsPanel({ events }: { events: BusEvent[] }) {
       <CardContent className="p-0">
         <ScrollArea className="h-[calc(100%-2rem)]">
           {errorEvents.length === 0 ? (
-            <p className="text-xs text-muted-foreground px-3 py-4 text-center">
-              No errors
-            </p>
+            <p className="text-xs text-muted-foreground px-3 py-4 text-center">No errors</p>
           ) : (
             errorEvents.map((ev) => <ErrorItem key={ev.id} event={ev} />)
           )}

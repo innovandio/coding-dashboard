@@ -160,7 +160,12 @@ export function ProjectManagerDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(v) => { if (!addBusy) setOpen(v); }}>
+      <Dialog
+        open={open}
+        onOpenChange={(v) => {
+          if (!addBusy) setOpen(v);
+        }}
+      >
         <DialogTrigger asChild>
           <Button variant="outline" size="icon" className="rounded-l-none">
             <Settings className="size-3.5" />
@@ -173,23 +178,15 @@ export function ProjectManagerDialog({
 
           <div className="space-y-1 max-h-64 overflow-y-auto">
             {projects.length === 0 && (
-              <p className="text-xs text-muted-foreground py-2">
-                No projects yet.
-              </p>
+              <p className="text-xs text-muted-foreground py-2">No projects yet.</p>
             )}
             {projects.map((p) => (
               <div key={p.id}>
                 {deletingId === p.id ? (
                   <div className="flex items-center justify-between rounded-md border border-destructive/50 px-3 py-2">
-                    <span className="text-xs text-destructive">
-                      Delete {p.name}?
-                    </span>
+                    <span className="text-xs text-destructive">Delete {p.name}?</span>
                     <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => setDeletingId(null)}
-                      >
+                      <Button variant="ghost" size="icon-xs" onClick={() => setDeletingId(null)}>
                         <X className="size-3.5" />
                       </Button>
                       <Button
@@ -328,20 +325,20 @@ export function ProjectManagerDialog({
               </div>
               {addPhase === "confirm" && (
                 <div className="rounded-md border border-yellow-600/40 bg-yellow-950/30 px-3 py-2 text-xs text-yellow-200">
-                  Adding a project will restart the OpenClaw gateway to mount the
-                  workspace. Any active agent sessions will be interrupted briefly.
+                  Adding a project will restart the OpenClaw gateway to mount the workspace. Any
+                  active agent sessions will be interrupted briefly.
                 </div>
               )}
-              {addError && (
-                <p className="text-xs text-destructive">{addError}</p>
-              )}
+              {addError && <p className="text-xs text-destructive">{addError}</p>}
               {addPhase === "confirm" ? (
                 <div className="flex gap-2">
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => { setAddPhase("idle"); }}
+                    onClick={() => {
+                      setAddPhase("idle");
+                    }}
                   >
                     Cancel
                   </Button>
@@ -364,11 +361,7 @@ export function ProjectManagerDialog({
                   >
                     Cancel
                   </Button>
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={addBusy || !newAgentId || !newPath}
-                  >
+                  <Button type="submit" size="sm" disabled={addBusy || !newAgentId || !newPath}>
                     Add Project
                   </Button>
                 </div>

@@ -61,20 +61,17 @@ export function usePtyStream(projectId: string | null) {
   }, []);
 
   /** Send raw input data to a specific PTY process. */
-  const sendInput = useCallback(
-    async (runId: string, data: string) => {
-      try {
-        await fetch("/api/pty/input", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ runId, data }),
-        });
-      } catch {
-        /* best effort */
-      }
-    },
-    [],
-  );
+  const sendInput = useCallback(async (runId: string, data: string) => {
+    try {
+      await fetch("/api/pty/input", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runId, data }),
+      });
+    } catch {
+      /* best effort */
+    }
+  }, []);
 
   /** Kill a specific PTY process. */
   const killProcess = useCallback(async (runId: string) => {
@@ -135,7 +132,9 @@ export function usePtyStream(projectId: string | null) {
 
     es.onopen = () => {
       setConnected(true);
-      setTimeout(() => { replayDone = true; }, 500);
+      setTimeout(() => {
+        replayDone = true;
+      }, 500);
     };
     es.onerror = () => setConnected(false);
 
@@ -172,7 +171,9 @@ export function usePtyStream(projectId: string | null) {
             activityTimer = setTimeout(() => setHasActivity(false), 1000);
           }
         }
-      } catch { /* ignore parse errors */ }
+      } catch {
+        /* ignore parse errors */
+      }
     };
 
     es.addEventListener("started", (e) => {
@@ -202,7 +203,9 @@ export function usePtyStream(projectId: string | null) {
             term.reset();
           }
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     });
 
     es.addEventListener("exited", (e) => {
@@ -222,7 +225,9 @@ export function usePtyStream(projectId: string | null) {
             writeToTerminal(exitMsg);
           }
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       setHasActivity(false);
       if (activityTimer) clearTimeout(activityTimer);
     });
@@ -235,5 +240,14 @@ export function usePtyStream(projectId: string | null) {
     };
   }, [projectId, writeToTerminal]);
 
-  return { setTerminal, connected, hasActivity, allRuns, selectedRunId, selectRun, sendInput, killProcess };
+  return {
+    setTerminal,
+    connected,
+    hasActivity,
+    allRuns,
+    selectedRunId,
+    selectRun,
+    sendInput,
+    killProcess,
+  };
 }

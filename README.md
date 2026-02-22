@@ -57,12 +57,12 @@ A real-time dashboard for monitoring and controlling AI coding agents running in
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `pnpm dev` | Start dev server (auto-starts Docker services) |
-| `pnpm build` | Production build |
-| `pnpm start` | Start production server |
-| `pnpm lint` | Run ESLint |
+| Command      | Description                                    |
+| ------------ | ---------------------------------------------- |
+| `pnpm dev`   | Start dev server (auto-starts Docker services) |
+| `pnpm build` | Production build                               |
+| `pnpm start` | Start production server                        |
+| `pnpm lint`  | Run ESLint                                     |
 
 ## Architecture
 
@@ -109,12 +109,12 @@ A real-time dashboard for monitoring and controlling AI coding agents running in
 
 ### Docker Services
 
-| Service | Port | Purpose |
-|---------|------|---------|
-| `postgres` | 5434 | Application database |
-| `adminer` | 8089 | Database admin UI |
-| `openclaw-gateway` | 18789 | Agent execution (WebSocket) |
-| `sandbox-browser` | 6080, 9222, 5900 | Sandboxed browser for agents |
+| Service            | Port             | Purpose                      |
+| ------------------ | ---------------- | ---------------------------- |
+| `postgres`         | 5434             | Application database         |
+| `adminer`          | 8089             | Database admin UI            |
+| `openclaw-gateway` | 18789            | Agent execution (WebSocket)  |
+| `sandbox-browser`  | 6080, 9222, 5900 | Sandboxed browser for agents |
 
 ### Project Structure
 

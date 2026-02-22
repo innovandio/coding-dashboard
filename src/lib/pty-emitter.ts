@@ -114,7 +114,12 @@ export function getPtyEmitter(): EventEmitter {
     emitter.on("pty.started", (evt: PtyLifecycleEvent) => {
       if (!evt.runId || !evt.projectId) return;
       if (!buffers.has(evt.runId)) {
-        buffers.set(evt.runId, { projectId: evt.projectId, chunks: [], totalBytes: 0, lastAccessedAt: Date.now() });
+        buffers.set(evt.runId, {
+          projectId: evt.projectId,
+          chunks: [],
+          totalBytes: 0,
+          lastAccessedAt: Date.now(),
+        });
       }
       const metaMap = getMetaMap();
       metaMap.set(evt.runId, { label: evt.label, command: evt.command });

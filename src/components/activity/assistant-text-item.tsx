@@ -5,32 +5,18 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { proseClasses } from "@/lib/styles";
 
-export function AssistantTextRow({
-  text,
-  isStreaming,
-}: {
-  text: string;
-  isStreaming: boolean;
-}) {
+export function AssistantTextRow({ text, isStreaming }: { text: string; isStreaming: boolean }) {
   return (
     <div className="px-2 py-1">
       <div className={proseClasses}>
         <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
       </div>
-      {isStreaming && (
-        <span className="inline-block w-1.5 h-3 ml-0.5 bg-current animate-pulse" />
-      )}
+      {isStreaming && <span className="inline-block w-1.5 h-3 ml-0.5 bg-current animate-pulse" />}
     </div>
   );
 }
 
-export function ThinkingRow({
-  text,
-  isStreaming,
-}: {
-  text: string;
-  isStreaming: boolean;
-}) {
+export function ThinkingRow({ text, isStreaming }: { text: string; isStreaming: boolean }) {
   const [open, setOpen] = useState(false);
 
   return (

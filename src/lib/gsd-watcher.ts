@@ -108,13 +108,17 @@ async function watchProject(projectId: string, workspacePath: string): Promise<W
 function stopEntry(entry: WatcherEntry) {
   if (entry.debounceTimer) clearTimeout(entry.debounceTimer);
   for (const w of entry.watchers) {
-    try { w.close(); } catch { /* ignore */ }
+    try {
+      w.close();
+    } catch {
+      /* ignore */
+    }
   }
   entry.watchers = [];
 }
 
 export async function initGsdWatchers(
-  projects: { id: string; name?: string; workspace_path: string | null }[]
+  projects: { id: string; name?: string; workspace_path: string | null }[],
 ) {
   const state = getState();
   const activeIds = new Set<string>();
@@ -147,7 +151,6 @@ export async function initGsdWatchers(
       console.log(`[gsd-watcher] Stopped watching project ${id}`);
     }
   }
-
 }
 
 export function getGsdTasks(projectId?: string): GsdTask[] {
@@ -165,7 +168,10 @@ export function getGsdTasks(projectId?: string): GsdTask[] {
   return results;
 }
 
-export async function refreshProjectTasks(projectId: string, workspacePath: string): Promise<GsdTask[]> {
+export async function refreshProjectTasks(
+  projectId: string,
+  workspacePath: string,
+): Promise<GsdTask[]> {
   await refreshProject(projectId, workspacePath);
   return getGsdTasks(projectId);
 }

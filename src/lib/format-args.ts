@@ -1,7 +1,4 @@
-export function formatArgsSummary(
-  name: string,
-  args: Record<string, unknown>
-): string {
+export function formatArgsSummary(name: string, args: Record<string, unknown>): string {
   const n = name.toLowerCase();
   switch (n) {
     case "exec":

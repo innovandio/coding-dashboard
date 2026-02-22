@@ -27,7 +27,7 @@ export function defaultHeartbeatConfig(): HeartbeatConfig {
 
 export function HeartbeatConfigForm({ value, onChange, disabled }: Props) {
   const [showAdvanced, setShowAdvanced] = useState(
-    !!(value.activeHoursStart || value.activeHoursEnd || value.prompt)
+    !!(value.activeHoursStart || value.activeHoursEnd || value.prompt),
   );
 
   return (
@@ -35,9 +35,7 @@ export function HeartbeatConfigForm({ value, onChange, disabled }: Props) {
       <div className="flex items-center gap-2">
         <Switch
           checked={value.enabled}
-          onCheckedChange={(checked) =>
-            onChange({ ...value, enabled: !!checked })
-          }
+          onCheckedChange={(checked) => onChange({ ...value, enabled: !!checked })}
           disabled={disabled}
         />
         <Label className="text-xs">Enable Heartbeat</Label>
@@ -54,9 +52,7 @@ export function HeartbeatConfigForm({ value, onChange, disabled }: Props) {
               className="h-7 text-xs"
               disabled={disabled}
             />
-            <p className="text-[10px] text-muted-foreground">
-              e.g. 30m, 1h, 2h
-            </p>
+            <p className="text-[10px] text-muted-foreground">e.g. 30m, 1h, 2h</p>
           </div>
 
           <button
@@ -79,9 +75,7 @@ export function HeartbeatConfigForm({ value, onChange, disabled }: Props) {
                 <div className="flex items-center gap-2">
                   <Input
                     value={value.activeHoursStart}
-                    onChange={(e) =>
-                      onChange({ ...value, activeHoursStart: e.target.value })
-                    }
+                    onChange={(e) => onChange({ ...value, activeHoursStart: e.target.value })}
                     placeholder="09:00"
                     className="h-7 text-xs w-24"
                     disabled={disabled}
@@ -89,9 +83,7 @@ export function HeartbeatConfigForm({ value, onChange, disabled }: Props) {
                   <span className="text-xs text-muted-foreground">to</span>
                   <Input
                     value={value.activeHoursEnd}
-                    onChange={(e) =>
-                      onChange({ ...value, activeHoursEnd: e.target.value })
-                    }
+                    onChange={(e) => onChange({ ...value, activeHoursEnd: e.target.value })}
                     placeholder="17:00"
                     className="h-7 text-xs w-24"
                     disabled={disabled}
@@ -103,9 +95,7 @@ export function HeartbeatConfigForm({ value, onChange, disabled }: Props) {
                 <Label className="text-[11px]">Custom Prompt</Label>
                 <textarea
                   value={value.prompt}
-                  onChange={(e) =>
-                    onChange({ ...value, prompt: e.target.value })
-                  }
+                  onChange={(e) => onChange({ ...value, prompt: e.target.value })}
                   placeholder="Default: reads HEARTBEAT.md and acts on it"
                   className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 min-h-[60px] resize-y"
                   disabled={disabled}

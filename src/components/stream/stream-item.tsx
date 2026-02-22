@@ -45,9 +45,7 @@ export function StreamItem({ event }: { event: BusEvent }) {
         <Badge variant="outline" className="text-[10px] h-4 shrink-0">
           {event.event_type}
         </Badge>
-        <span className="text-xs text-foreground truncate">
-          {getSummary(event)}
-        </span>
+        <span className="text-xs text-foreground truncate">{getSummary(event)}</span>
       </div>
       {expanded && (
         <div className="mt-2 ml-14 p-2 bg-muted/50 rounded">

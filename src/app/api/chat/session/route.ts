@@ -18,17 +18,18 @@ export async function POST(req: NextRequest) {
   const pool = getPool();
 
   // Look up the project
-  const project = await pool.query<{ agent_id: string; name: string; workspace_path: string | null }>(
-    `SELECT agent_id, name, workspace_path FROM projects WHERE id = $1`,
-    [projectId]
-  );
+  const project = await pool.query<{
+    agent_id: string;
+    name: string;
+    workspace_path: string | null;
+  }>(`SELECT agent_id, name, workspace_path FROM projects WHERE id = $1`, [projectId]);
   const row = project.rows[0];
   const agentId = row?.agent_id ?? projectId;
 
   // Check if project already has a chat session
   const existing = await pool.query<{ id: string; session_key: string }>(
     `SELECT id, session_key FROM sessions WHERE project_id = $1 AND meta->>'type' = 'chat' LIMIT 1`,
-    [projectId]
+    [projectId],
   );
 
   if (existing.rows.length > 0) {
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
     `INSERT INTO sessions (id, project_id, session_key, meta)
      VALUES ($1, $2, $3, $4)
      ON CONFLICT (id) DO NOTHING`,
-    [sessionId, projectId, sessionKey, JSON.stringify({ type: "chat" })]
+    [sessionId, projectId, sessionKey, JSON.stringify({ type: "chat" })],
   );
 
   return NextResponse.json({ sessionId, sessionKey, isNew: true });

@@ -9,10 +9,7 @@ import { getEventBus, nextSyntheticId, type BusEvent } from "./event-bus";
 import { initGsdWatchers } from "./gsd-watcher";
 
 const execFileAsync = promisify(execFile);
-import type {
-  ConnectionState,
-  GatewayRequest,
-} from "./gateway-protocol";
+import type { ConnectionState, GatewayRequest } from "./gateway-protocol";
 
 // --- Device identity for gateway auth (Ed25519) ---
 
@@ -51,7 +48,9 @@ function loadOrCreateDeviceIdentity(): DeviceIdentity {
         return parsed;
       }
     }
-  } catch { /* regenerate */ }
+  } catch {
+    /* regenerate */
+  }
 
   const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
   const publicKeyPem = publicKey.export({ type: "spki", format: "pem" }).toString();
@@ -62,18 +61,33 @@ function loadOrCreateDeviceIdentity(): DeviceIdentity {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(
     filePath,
-    JSON.stringify({ version: 1, deviceId, publicKeyPem, privateKeyPem, createdAtMs: Date.now() }, null, 2) + "\n",
-    { mode: 0o600 }
+    JSON.stringify(
+      { version: 1, deviceId, publicKeyPem, privateKeyPem, createdAtMs: Date.now() },
+      null,
+      2,
+    ) + "\n",
+    { mode: 0o600 },
   );
   return { deviceId, publicKeyPem, privateKeyPem };
 }
 
-function buildDeviceConnect(identity: DeviceIdentity, scopes: string[], token: string, nonce?: string) {
+function buildDeviceConnect(
+  identity: DeviceIdentity,
+  scopes: string[],
+  token: string,
+  nonce?: string,
+) {
   const signedAt = Date.now();
   const version = nonce ? "v2" : "v1";
   const parts = [
-    version, identity.deviceId, "gateway-client", "backend", "operator",
-    scopes.join(","), String(signedAt), token,
+    version,
+    identity.deviceId,
+    "gateway-client",
+    "backend",
+    "operator",
+    scopes.join(","),
+    String(signedAt),
+    token,
   ];
   if (version === "v2") parts.push(nonce ?? "");
   const payload = parts.join("|");
@@ -162,8 +176,13 @@ function checkNeedsSetup(state: IngestorState): void {
 
   needsSetupCheckInFlight = true;
   execFileAsync("docker", [
-    "compose", "exec", "-T", "openclaw-gateway",
-    "sh", "-c", "test -f $HOME/.openclaw/openclaw.json",
+    "compose",
+    "exec",
+    "-T",
+    "openclaw-gateway",
+    "sh",
+    "-c",
+    "test -f $HOME/.openclaw/openclaw.json",
   ])
     .then(() => {
       state.needsSetup = false;
@@ -199,7 +218,11 @@ export function restartIngestor(): void {
     // this, the overlap between old and new connections causes every PTY event
     // to be emitted twice (old handler + new handler both run).
     s.ws.removeAllListeners("message");
-    try { s.ws.close(); } catch { /* ignore */ }
+    try {
+      s.ws.close();
+    } catch {
+      /* ignore */
+    }
     s.ws = null;
   }
   // Clear pending requests
@@ -236,8 +259,13 @@ function checkNeedsClaudeLogin(state: IngestorState): void {
 
   claudeLoginCheckInFlight = true;
   execFileAsync("docker", [
-    "compose", "exec", "-T", "openclaw-gateway",
-    "sh", "-c", "test -f $HOME/.claude/.credentials.json",
+    "compose",
+    "exec",
+    "-T",
+    "openclaw-gateway",
+    "sh",
+    "-c",
+    "test -f $HOME/.claude/.credentials.json",
   ])
     .then(() => {
       // File exists — credentials present
@@ -266,8 +294,7 @@ function shouldEmit(eventType: string, payload: Record<string, unknown>): boolea
   if (eventType === "tick") return false;
   if (
     eventType === "agent" &&
-    (payload.data as Record<string, unknown> | undefined)?.text ===
-      "HEARTBEAT_OK"
+    (payload.data as Record<string, unknown> | undefined)?.text === "HEARTBEAT_OK"
   )
     return false;
   return true;
@@ -341,22 +368,25 @@ let agentRefreshInFlight = false;
 function refreshAgentIds(s: IngestorState) {
   if (agentRefreshInFlight) return;
   agentRefreshInFlight = true;
-  sendGatewayRequest("agents.list").then((payload) => {
-    const agents = (payload as { agents?: Array<{ id: string }> }).agents;
-    if (agents) {
-      for (const a of agents) {
-        s.agentIds.add(a.id);
+  sendGatewayRequest("agents.list")
+    .then((payload) => {
+      const agents = (payload as { agents?: Array<{ id: string }> }).agents;
+      if (agents) {
+        for (const a of agents) {
+          s.agentIds.add(a.id);
+        }
       }
-    }
-  }).catch(() => {}).finally(() => {
-    agentRefreshInFlight = false;
-  });
+    })
+    .catch(() => {})
+    .finally(() => {
+      agentRefreshInFlight = false;
+    });
 }
 
 export function sendGatewayRequest(
   method: string,
   params?: Record<string, unknown>,
-  timeoutMs = 10000
+  timeoutMs = 10000,
 ): Promise<Record<string, unknown>> {
   const state = globalThis.__ingestorState;
   if (!state || !state.ws || state.ws.readyState !== WebSocket.OPEN) {
@@ -381,7 +411,7 @@ export async function refreshGsdWatchers() {
   try {
     const pool = getPool();
     const result = await pool.query<{ id: string; name: string; workspace_path: string }>(
-      `SELECT id, name, workspace_path FROM projects WHERE workspace_path IS NOT NULL`
+      `SELECT id, name, workspace_path FROM projects WHERE workspace_path IS NOT NULL`,
     );
     await initGsdWatchers(result.rows);
   } catch (err) {
@@ -462,7 +492,8 @@ export function startIngestor() {
       // Handle challenge-response auth flow
       if (msg.type === "event" && msg.event === "connect.challenge") {
         const challengePayload = msg.payload as Record<string, unknown> | undefined;
-        const nonce = typeof challengePayload?.nonce === "string" ? challengePayload.nonce : undefined;
+        const nonce =
+          typeof challengePayload?.nonce === "string" ? challengePayload.nonce : undefined;
         sendReq("connect", {
           minProtocol: 3,
           maxProtocol: 3,
@@ -517,17 +548,19 @@ export function startIngestor() {
           }
 
           // Actively fetch agents list from Gateway
-          sendGatewayRequest("agents.list").then((payload) => {
-            const agents = (payload as { agents?: Array<{ id: string }> }).agents;
-            if (agents) {
-              for (const a of agents) {
-                state.agentIds.add(a.id);
+          sendGatewayRequest("agents.list")
+            .then((payload) => {
+              const agents = (payload as { agents?: Array<{ id: string }> }).agents;
+              if (agents) {
+                for (const a of agents) {
+                  state.agentIds.add(a.id);
+                }
+                console.log("[ingestor] Fetched agents:", Array.from(state.agentIds));
               }
-              console.log("[ingestor] Fetched agents:", Array.from(state.agentIds));
-            }
-          }).catch((err) => {
-            console.error("[ingestor] agents.list failed:", err.message);
-          });
+            })
+            .catch((err) => {
+              console.error("[ingestor] agents.list failed:", err.message);
+            });
 
           // Activate PTY event broadcasting via the pty-broadcast plugin
           sendGatewayRequest("pty.subscribe", {}).catch((err) => {
@@ -548,15 +581,8 @@ export function startIngestor() {
         const eventName = msg.event as string;
         const payload = (msg.payload ?? msg) as Record<string, unknown>;
 
-
-        let agentId =
-          (payload.agentId as string) ??
-          (payload.agent_id as string) ??
-          null;
-        let sessionId =
-          (payload.sessionId as string) ??
-          (payload.session_id as string) ??
-          null;
+        let agentId = (payload.agentId as string) ?? (payload.agent_id as string) ?? null;
+        let sessionId = (payload.sessionId as string) ?? (payload.session_id as string) ?? null;
 
         if (agentId) state.agentIds.add(agentId);
 
@@ -576,10 +602,12 @@ export function startIngestor() {
             try {
               const result = await pool.query<{ id: string }>(
                 `SELECT id FROM projects WHERE agent_id = $1 LIMIT 1`,
-                [backendId]
+                [backendId],
               );
               projectId = result.rows[0]?.id;
-            } catch { /* best effort */ }
+            } catch {
+              /* best effort */
+            }
           }
           // Fallback: parse agentId from sessionId (format: "agentId:uuid" or plain agentId)
           if (!projectId && payload.sessionId) {
@@ -589,10 +617,12 @@ export function startIngestor() {
               try {
                 const result = await pool.query<{ id: string }>(
                   `SELECT id FROM projects WHERE agent_id = $1 LIMIT 1`,
-                  [agentId]
+                  [agentId],
                 );
                 projectId = result.rows[0]?.id;
-              } catch { /* best effort */ }
+              } catch {
+                /* best effort */
+              }
             }
           }
           getPtyEmitter().emit(eventName, { ...payload, projectId });
@@ -615,14 +645,7 @@ export function startIngestor() {
           await ensureSession(sessionId, projectId);
         }
 
-        await handleEvent(
-          projectId,
-          sessionId,
-          agentId,
-          "gateway",
-          eventName,
-          payload
-        );
+        await handleEvent(projectId, sessionId, agentId, "gateway", eventName, payload);
       }
     });
 
@@ -643,11 +666,15 @@ export function startIngestor() {
 
     ws.on("error", (err) => {
       console.error("[ingestor] WS error:", err.message);
-      try { ws.close(); } catch { /* ignore */ }
+      try {
+        ws.close();
+      } catch {
+        /* ignore */
+      }
     });
 
     async function resolveSessionKey(
-      sessionKey: string
+      sessionKey: string,
     ): Promise<{ projectId: string; sessionId: string; agentId: string } | null> {
       const cached = sessionKeyCacheGet(sessionKey);
       if (cached) return cached;
@@ -658,7 +685,7 @@ export function startIngestor() {
            FROM sessions s
            JOIN projects p ON p.id = s.project_id
            WHERE s.session_key = $1 LIMIT 1`,
-          [sessionKey]
+          [sessionKey],
         );
         if (result.rows.length > 0) {
           const entry = {
@@ -681,7 +708,7 @@ export function startIngestor() {
       agentId: string | null,
       source: string,
       eventType: string,
-      payload: unknown
+      payload: unknown,
     ) {
       const p = payload as Record<string, unknown>;
       if (!shouldEmit(eventType, p)) return;
@@ -703,14 +730,14 @@ export function startIngestor() {
       try {
         const existing = await pool.query<{ id: string }>(
           `SELECT id FROM projects WHERE agent_id = $1`,
-          [agentId]
+          [agentId],
         );
         if (existing.rows.length > 0) return existing.rows[0].id;
 
         const id = agentId;
         await pool.query(
           `INSERT INTO projects (id, agent_id, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING`,
-          [id, agentId, agentId]
+          [id, agentId, agentId],
         );
         return id;
       } catch (err) {
@@ -719,20 +746,16 @@ export function startIngestor() {
       }
     }
 
-    async function ensureSession(
-      sessionId: string,
-      projectId: string
-    ): Promise<void> {
+    async function ensureSession(sessionId: string, projectId: string): Promise<void> {
       try {
-        const existing = await pool.query<{ id: string }>(
-          `SELECT id FROM sessions WHERE id = $1`,
-          [sessionId]
-        );
+        const existing = await pool.query<{ id: string }>(`SELECT id FROM sessions WHERE id = $1`, [
+          sessionId,
+        ]);
         if (existing.rows.length > 0) return;
 
         await pool.query(
           `INSERT INTO sessions (id, project_id) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING`,
-          [sessionId, projectId]
+          [sessionId, projectId],
         );
       } catch (err) {
         console.error("[ingestor] ensureSession error:", err);
@@ -743,9 +766,7 @@ export function startIngestor() {
   function scheduleReconnect() {
     state.reconnectAttempts++;
     const delay = Math.min(1000 * Math.pow(2, state.reconnectAttempts - 1), 30000);
-    console.log(
-      `[ingestor] Reconnecting in ${delay}ms (attempt ${state.reconnectAttempts})`
-    );
+    console.log(`[ingestor] Reconnecting in ${delay}ms (attempt ${state.reconnectAttempts})`);
 
     // After repeated failures, check if the gateway needs setup
     if (state.reconnectAttempts > 2) {

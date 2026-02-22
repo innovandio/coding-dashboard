@@ -26,10 +26,7 @@ export async function POST(req: NextRequest) {
   const { agentId, workspace, basedOn } = await req.json();
 
   if (!agentId || !workspace) {
-    return NextResponse.json(
-      { error: "agentId and workspace are required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "agentId and workspace are required" }, { status: 400 });
   }
 
   try {
@@ -40,23 +37,37 @@ export async function POST(req: NextRequest) {
     const containerProjectDir = `/projects/${agentId}`;
     const agentDirPath = agentDir(agentId);
     const runArgs = [
-      "compose", "run", "--rm", "-T",
-      "-v", `${workspace}:${containerProjectDir}`,
+      "compose",
+      "run",
+      "--rm",
+      "-T",
+      "-v",
+      `${workspace}:${containerProjectDir}`,
       "openclaw-gateway",
     ];
 
     // Pre-create the agent directory in the running container.
     await execFileAsync("docker", [
-      "compose", "exec", "openclaw-gateway",
-      "mkdir", "-p", agentDirPath,
+      "compose",
+      "exec",
+      "openclaw-gateway",
+      "mkdir",
+      "-p",
+      agentDirPath,
     ]);
 
     try {
       await execFileAsync("docker", [
         ...runArgs,
-        "node", "openclaw.mjs", "agents", "add", agentId,
-        "--workspace", agentDirPath,
-        "--agent-dir", agentDirPath,
+        "node",
+        "openclaw.mjs",
+        "agents",
+        "add",
+        agentId,
+        "--workspace",
+        agentDirPath,
+        "--agent-dir",
+        agentDirPath,
         "--non-interactive",
       ]);
     } catch (addErr) {
@@ -65,13 +76,24 @@ export async function POST(req: NextRequest) {
         // Delete stale agent and re-add with the correct paths
         await execFileAsync("docker", [
           ...runArgs,
-          "node", "openclaw.mjs", "agents", "delete", agentId, "--force",
+          "node",
+          "openclaw.mjs",
+          "agents",
+          "delete",
+          agentId,
+          "--force",
         ]);
         await execFileAsync("docker", [
           ...runArgs,
-          "node", "openclaw.mjs", "agents", "add", agentId,
-          "--workspace", agentDirPath,
-          "--agent-dir", agentDirPath,
+          "node",
+          "openclaw.mjs",
+          "agents",
+          "add",
+          agentId,
+          "--workspace",
+          agentDirPath,
+          "--agent-dir",
+          agentDirPath,
           "--non-interactive",
         ]);
       } else {

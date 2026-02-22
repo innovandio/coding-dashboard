@@ -61,7 +61,13 @@ export default function Home() {
     ) {
       setClaudeLoginOpen(true);
     }
-  }, [health.needsSetup, health.needsClaudeLogin, claudeLoginOpen, claudeLoginDismissed, setupOpen]);
+  }, [
+    health.needsSetup,
+    health.needsClaudeLogin,
+    claudeLoginOpen,
+    claudeLoginDismissed,
+    setupOpen,
+  ]);
 
   const handleSetupComplete = useCallback(() => {
     setSetupOpen(false);
@@ -78,14 +84,8 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
-      <SetupDialog
-        open={setupOpen}
-        onSetupComplete={handleSetupComplete}
-      />
-      <ClaudeLoginDialog
-        open={claudeLoginOpen}
-        onLoginComplete={handleClaudeLoginComplete}
-      />
+      <SetupDialog open={setupOpen} onSetupComplete={handleSetupComplete} />
+      <ClaudeLoginDialog open={claudeLoginOpen} onLoginComplete={handleClaudeLoginComplete} />
       <TopBar
         projects={projects}
         selectedProjectId={selectedProjectId}

@@ -56,9 +56,7 @@ export function ErrorItem({ event }: { event: BusEvent }) {
         <span className="text-[10px] text-muted-foreground font-mono shrink-0">
           {formatTime(event.created_at)}
         </span>
-        <span className="text-xs text-foreground truncate">
-          {getMessage(event)}
-        </span>
+        <span className="text-xs text-foreground truncate">{getMessage(event)}</span>
       </div>
       {expanded && (
         <div className="mt-2 ml-6 p-2 bg-muted/50 rounded">

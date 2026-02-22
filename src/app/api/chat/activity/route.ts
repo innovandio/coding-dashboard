@@ -133,10 +133,7 @@ export async function GET(req: NextRequest) {
               id: block.id,
               name: block.name,
               arguments: block.arguments ?? {},
-              argsSummary: formatArgsSummary(
-                block.name,
-                block.arguments ?? {}
-              ),
+              argsSummary: formatArgsSummary(block.name, block.arguments ?? {}),
               result: null,
               isError: false,
             };

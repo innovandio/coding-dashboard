@@ -23,11 +23,16 @@ function toToolCallItem(tc: ConversationToolCall): ToolCallItem {
 
 function errorTypeLabel(type: string): string {
   switch (type) {
-    case "rate_limit_error": return "Rate limited";
-    case "overloaded_error": return "API overloaded";
-    case "api_error": return "API error";
-    case "authentication_error": return "Auth error";
-    default: return type.replace(/_/g, " ");
+    case "rate_limit_error":
+      return "Rate limited";
+    case "overloaded_error":
+      return "API overloaded";
+    case "api_error":
+      return "API error";
+    case "authentication_error":
+      return "Auth error";
+    default:
+      return type.replace(/_/g, " ");
   }
 }
 
@@ -62,7 +67,10 @@ export function AssistantTurn({
               {isStreaming && !text ? "..." : ""}
             </button>
             {thinkingOpen && (
-              <div id="thinking-content" className="mt-1 pl-2 border-l-2 border-muted-foreground/30 text-muted-foreground whitespace-pre-wrap text-[0.65rem] max-h-48 overflow-y-auto">
+              <div
+                id="thinking-content"
+                className="mt-1 pl-2 border-l-2 border-muted-foreground/30 text-muted-foreground whitespace-pre-wrap text-[0.65rem] max-h-48 overflow-y-auto"
+              >
                 {thinking}
               </div>
             )}
@@ -81,11 +89,13 @@ export function AssistantTurn({
           </div>
         )}
         {error && (
-          <div className={`flex items-center gap-1.5 px-2 py-1 rounded text-[0.65rem] ${
-            error.isFinal
-              ? "bg-red-500/10 border border-red-500/20 text-red-400"
-              : "bg-yellow-500/10 border border-yellow-500/20 text-yellow-400"
-          }`}>
+          <div
+            className={`flex items-center gap-1.5 px-2 py-1 rounded text-[0.65rem] ${
+              error.isFinal
+                ? "bg-red-500/10 border border-red-500/20 text-red-400"
+                : "bg-yellow-500/10 border border-yellow-500/20 text-yellow-400"
+            }`}
+          >
             {error.isFinal ? (
               <XCircle className="h-3 w-3 shrink-0" />
             ) : (
@@ -97,9 +107,7 @@ export function AssistantTurn({
             </span>
           </div>
         )}
-        {isStreaming && (
-          <span className="inline-block w-1.5 h-3 ml-0.5 bg-current animate-pulse" />
-        )}
+        {isStreaming && <span className="inline-block w-1.5 h-3 ml-0.5 bg-current animate-pulse" />}
       </div>
     </div>
   );

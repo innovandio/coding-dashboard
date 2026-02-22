@@ -1,12 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -94,7 +89,12 @@ export function ProjectEditDialog({ project, onClose, onSaved }: Props) {
   }
 
   return (
-    <Dialog open={!!project} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <Dialog
+      open={!!project}
+      onOpenChange={(v) => {
+        if (!v) onClose();
+      }}
+    >
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Edit Project{project ? `: ${project.name}` : ""}</DialogTitle>
@@ -102,7 +102,9 @@ export function ProjectEditDialog({ project, onClose, onSaved }: Props) {
 
         <div className="max-h-[60vh] overflow-y-auto space-y-4 pr-1">
           <div className="space-y-1.5">
-            <Label htmlFor="edit-name" className="text-xs">Name</Label>
+            <Label htmlFor="edit-name" className="text-xs">
+              Name
+            </Label>
             <Input
               id="edit-name"
               value={name}
@@ -114,7 +116,9 @@ export function ProjectEditDialog({ project, onClose, onSaved }: Props) {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="edit-workspace" className="text-xs">Workspace Path</Label>
+            <Label htmlFor="edit-workspace" className="text-xs">
+              Workspace Path
+            </Label>
             <FolderPicker
               id="edit-workspace"
               value={workspacePath}
@@ -158,30 +162,16 @@ export function ProjectEditDialog({ project, onClose, onSaved }: Props) {
             {loadingHeartbeat ? (
               <p className="text-[10px] text-muted-foreground">Loading...</p>
             ) : (
-              <HeartbeatConfigForm
-                value={heartbeat}
-                onChange={setHeartbeat}
-                disabled={saving}
-              />
+              <HeartbeatConfigForm value={heartbeat} onChange={setHeartbeat} disabled={saving} />
             )}
           </div>
         </div>
 
         <div className="flex gap-2 justify-end pt-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            disabled={saving}
-          >
+          <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button
-            size="sm"
-            disabled={saving || !name}
-            onClick={handleSave}
-          >
+          <Button size="sm" disabled={saving || !name} onClick={handleSave}>
             {saving ? "Saving..." : "Save Changes"}
           </Button>
         </div>

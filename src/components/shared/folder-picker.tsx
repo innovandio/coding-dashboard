@@ -3,11 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FolderOpen, FolderIcon, ChevronUp, Loader2 } from "lucide-react";
 
 interface BrowseResult {
@@ -39,9 +35,7 @@ export function FolderPicker({
   const browse = useCallback(async (path?: string) => {
     setLoading(true);
     try {
-      const url = path
-        ? `/api/browse?path=${encodeURIComponent(path)}`
-        : "/api/browse";
+      const url = path ? `/api/browse?path=${encodeURIComponent(path)}` : "/api/browse";
       const res = await fetch(url);
       if (res.ok) {
         const data: BrowseResult = await res.json();
@@ -86,10 +80,7 @@ export function FolderPicker({
             <FolderOpen className="size-3" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent
-          align="end"
-          className="w-80 p-0"
-        >
+        <PopoverContent align="end" className="w-80 p-0">
           <div className="flex items-center gap-1 border-b px-2 py-1.5">
             <Button
               type="button"

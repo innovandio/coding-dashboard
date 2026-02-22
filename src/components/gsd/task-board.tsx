@@ -71,9 +71,7 @@ function groupByPhase(tasks: GsdTask[]): PhaseGroup[] {
     }
   }
 
-  const phases = Array.from(phaseMap.values()).sort(
-    (a, b) => a.phaseNumber - b.phaseNumber
-  );
+  const phases = Array.from(phaseMap.values()).sort((a, b) => a.phaseNumber - b.phaseNumber);
 
   // Add ungrouped tasks as a misc phase if any
   if (ungrouped.length > 0) {
@@ -113,7 +111,7 @@ function ProgressBar({ plans }: { plans: GsdTask[] }) {
         <div
           className={cn(
             "h-full rounded-full transition-all",
-            pct === 100 ? "bg-green-500" : "bg-blue-500"
+            pct === 100 ? "bg-green-500" : "bg-blue-500",
           )}
           style={{ width: `${pct}%` }}
         />
@@ -136,7 +134,7 @@ function PhaseSection({ phase }: { phase: PhaseGroup }) {
         onClick={() => setExpanded(!expanded)}
         className={cn(
           "w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-muted/50 transition-colors",
-          allDone && "opacity-60"
+          allDone && "opacity-60",
         )}
       >
         {expanded ? (
@@ -147,7 +145,7 @@ function PhaseSection({ phase }: { phase: PhaseGroup }) {
         <div
           className={cn(
             "h-2 w-2 rounded-full shrink-0",
-            phaseStatusColor[phase.status] ?? phaseStatusColor.todo
+            phaseStatusColor[phase.status] ?? phaseStatusColor.todo,
           )}
         />
         <span className={cn("text-xs font-medium flex-1 truncate", allDone && "line-through")}>
@@ -162,15 +160,12 @@ function PhaseSection({ phase }: { phase: PhaseGroup }) {
               key={plan.id}
               className={cn(
                 "flex items-center gap-2 px-3 py-1.5 pl-8",
-                plan.status === "done" && "opacity-50"
+                plan.status === "done" && "opacity-50",
               )}
             >
               {statusIcon[plan.status] ?? statusIcon.todo}
               <span
-                className={cn(
-                  "text-xs flex-1 truncate",
-                  plan.status === "done" && "line-through"
-                )}
+                className={cn("text-xs flex-1 truncate", plan.status === "done" && "line-through")}
               >
                 {plan.title}
               </span>
@@ -185,9 +180,7 @@ function PhaseSection({ phase }: { phase: PhaseGroup }) {
 export function TaskBoard({ tasks }: { tasks: GsdTask[] }) {
   const phases = groupByPhase(tasks);
   const totalTasks = tasks.filter((t) => t.meta?.taskType !== "phase").length;
-  const doneTasks = tasks.filter(
-    (t) => t.meta?.taskType !== "phase" && t.status === "done"
-  ).length;
+  const doneTasks = tasks.filter((t) => t.meta?.taskType !== "phase" && t.status === "done").length;
   const pct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
   return (
@@ -205,7 +198,7 @@ export function TaskBoard({ tasks }: { tasks: GsdTask[] }) {
                   <div
                     className={cn(
                       "h-full rounded-full transition-all",
-                      pct === 100 ? "bg-green-500" : "bg-blue-500"
+                      pct === 100 ? "bg-green-500" : "bg-blue-500",
                     )}
                     style={{ width: `${pct}%` }}
                   />

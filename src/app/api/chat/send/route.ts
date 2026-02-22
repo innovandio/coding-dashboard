@@ -8,10 +8,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   const { sessionId, sessionKey, message } = await req.json();
   if (!sessionKey || !message) {
-    return NextResponse.json(
-      { error: "sessionKey and message required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "sessionKey and message required" }, { status: 400 });
   }
 
   const bus = getEventBus();

@@ -24,9 +24,7 @@ export function ToolCallRow({ item }: { item: ToolCallItemData }) {
         <Badge variant="outline" className="text-[10px] h-4 font-mono shrink-0">
           {item.name}
         </Badge>
-        <span className="text-[10px] text-muted-foreground truncate">
-          {item.argsSummary}
-        </span>
+        <span className="text-[10px] text-muted-foreground truncate">{item.argsSummary}</span>
       </button>
       {expanded && item.result != null && (
         <div className="ml-6 mr-2 mb-1 p-2 bg-muted/50 rounded text-xs">

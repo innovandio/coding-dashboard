@@ -128,9 +128,7 @@ export function ModelConfigForm({ value, onChange, disabled, compact }: Props) {
                 {p.id}
               </SelectItem>
             ))}
-            <SelectItem value={CUSTOM_SENTINEL}>
-              Custom (OpenAI / Anthropic compatible)
-            </SelectItem>
+            <SelectItem value={CUSTOM_SENTINEL}>Custom (OpenAI / Anthropic compatible)</SelectItem>
           </SelectContent>
         </Select>
       </div>

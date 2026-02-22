@@ -23,8 +23,13 @@ type ProgressCallback = (step: number, label: string) => void;
 async function isClaudeAuthed(): Promise<boolean> {
   try {
     await execFileAsync("docker", [
-      "compose", "exec", "-T", "openclaw-gateway",
-      "sh", "-c", "test -f $HOME/.claude/.credentials.json",
+      "compose",
+      "exec",
+      "-T",
+      "openclaw-gateway",
+      "sh",
+      "-c",
+      "test -f $HOME/.claude/.credentials.json",
     ]);
     return true;
   } catch {
@@ -37,9 +42,7 @@ async function isClaudeAuthed(): Promise<boolean> {
  * and wait for the callback to complete. The OAuth URL is sent to the client
  * via onOAuthUrl so it can open the browser.
  */
-function runClaudeOAuthLogin(
-  onOAuthUrl: (url: string) => void,
-): Promise<void> {
+function runClaudeOAuthLogin(onOAuthUrl: (url: string) => void): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const emitter = getLoginEmitter();
 
@@ -100,19 +103,34 @@ export async function runPostSetup(
   // directly — no running gateway needed). The restart below picks this up.
   try {
     await execFileAsync("docker", [
-      "compose", "exec", "-T", "openclaw-gateway",
-      "openclaw", "config", "set", "browser.defaultProfile", '"sandbox"',
+      "compose",
+      "exec",
+      "-T",
+      "openclaw-gateway",
+      "openclaw",
+      "config",
+      "set",
+      "browser.defaultProfile",
+      '"sandbox"',
     ]);
     console.log("[setup] Set browser.defaultProfile to sandbox in config");
   } catch (err) {
-    console.warn("[setup] Failed to set browser.defaultProfile:", err instanceof Error ? err.message : err);
+    console.warn(
+      "[setup] Failed to set browser.defaultProfile:",
+      err instanceof Error ? err.message : err,
+    );
   }
 
   // Enable the pty-broadcast plugin (writes to openclaw.json).
   try {
     await execFileAsync("docker", [
-      "compose", "exec", "-T", "openclaw-gateway",
-      "sh", "-c", `node -e "
+      "compose",
+      "exec",
+      "-T",
+      "openclaw-gateway",
+      "sh",
+      "-c",
+      `node -e "
         const f = process.env.HOME + '/.openclaw/openclaw.json';
         const fs = require('fs');
         const d = JSON.parse(fs.readFileSync(f, 'utf8'));
@@ -126,7 +144,10 @@ export async function runPostSetup(
     ]);
     console.log("[setup] Enabled pty-broadcast plugin");
   } catch (err) {
-    console.warn("[setup] Failed to enable pty-broadcast plugin:", err instanceof Error ? err.message : err);
+    console.warn(
+      "[setup] Failed to enable pty-broadcast plugin:",
+      err instanceof Error ? err.message : err,
+    );
   }
 
   // Step 1: Restart gateway (picks up new token + model config + browser default + plugins)
@@ -156,7 +177,10 @@ export async function runPostSetup(
     }
   } catch (err) {
     // Non-fatal — the gateway works without Claude Code auth
-    console.warn("[setup] Claude Code auth failed (non-fatal):", err instanceof Error ? err.message : err);
+    console.warn(
+      "[setup] Claude Code auth failed (non-fatal):",
+      err instanceof Error ? err.message : err,
+    );
   }
 
   // Step 3: Configure sandbox browser profile
@@ -234,20 +258,27 @@ async function configureSandboxBrowser(token: string): Promise<void> {
   for (let attempt = 0; attempt < 20; attempt++) {
     try {
       const { stdout } = await execFileAsync("docker", [
-        "compose", "exec", "-T", "openclaw-gateway",
-        "openclaw", "browser", "profiles", ...cliArgs, "--json",
+        "compose",
+        "exec",
+        "-T",
+        "openclaw-gateway",
+        "openclaw",
+        "browser",
+        "profiles",
+        ...cliArgs,
+        "--json",
       ]);
       const data = JSON.parse(stdout);
-      const exists = (data.profiles ?? []).some(
-        (p: { name: string }) => p.name === "sandbox",
-      );
+      const exists = (data.profiles ?? []).some((p: { name: string }) => p.name === "sandbox");
       if (exists) {
         console.log("[setup] Sandbox browser profile already exists");
         return;
       }
       break; // gateway is ready, profile doesn't exist — create it
     } catch {
-      console.log(`[setup] Waiting for gateway to create browser profile... (attempt ${attempt + 1})`);
+      console.log(
+        `[setup] Waiting for gateway to create browser profile... (attempt ${attempt + 1})`,
+      );
       await new Promise((r) => setTimeout(r, 3000));
     }
   }
@@ -257,8 +288,13 @@ async function configureSandboxBrowser(token: string): Promise<void> {
   let cdpUrl = "http://sandbox-browser:9222";
   try {
     const { stdout: hostLine } = await execFileAsync("docker", [
-      "compose", "exec", "-T", "openclaw-gateway",
-      "getent", "hosts", "sandbox-browser",
+      "compose",
+      "exec",
+      "-T",
+      "openclaw-gateway",
+      "getent",
+      "hosts",
+      "sandbox-browser",
     ]);
     const ip = hostLine.trim().split(/\s+/)[0];
     if (ip) {
@@ -271,16 +307,26 @@ async function configureSandboxBrowser(token: string): Promise<void> {
 
   try {
     await execFileAsync("docker", [
-      "compose", "exec", "-T", "openclaw-gateway",
-      "openclaw", "browser", "create-profile",
-      "--name", "sandbox",
-      "--cdp-url", cdpUrl,
+      "compose",
+      "exec",
+      "-T",
+      "openclaw-gateway",
+      "openclaw",
+      "browser",
+      "create-profile",
+      "--name",
+      "sandbox",
+      "--cdp-url",
+      cdpUrl,
       ...cliArgs,
     ]);
     console.log("[setup] Created sandbox browser profile");
   } catch (err) {
     // Non-fatal — browser features will work if profile is created later
-    console.warn("[setup] Failed to create sandbox browser profile:", err instanceof Error ? err.message : err);
+    console.warn(
+      "[setup] Failed to create sandbox browser profile:",
+      err instanceof Error ? err.message : err,
+    );
   }
 }
 
@@ -309,8 +355,14 @@ async function postSetupDeviceApproval(
     await new Promise((r) => setTimeout(r, 3000));
     try {
       await execFileAsync("docker", [
-        "compose", "exec", "-T", "openclaw-gateway",
-        "openclaw", "devices", "list", ...cliArgs,
+        "compose",
+        "exec",
+        "-T",
+        "openclaw-gateway",
+        "openclaw",
+        "devices",
+        "list",
+        ...cliArgs,
       ]);
       gatewayReady = true;
       break;
@@ -340,24 +392,42 @@ async function postSetupDeviceApproval(
 
     try {
       const { stdout } = await execFileAsync("docker", [
-        "compose", "exec", "-T", "openclaw-gateway",
-        "openclaw", "devices", "list", ...cliArgs,
+        "compose",
+        "exec",
+        "-T",
+        "openclaw-gateway",
+        "openclaw",
+        "devices",
+        "list",
+        ...cliArgs,
       ]);
       const data = JSON.parse(stdout);
 
       for (const pending of data.pending ?? []) {
         if (approvedIds.has(pending.requestId)) continue;
-        console.log(`[setup] Pending device found: ${pending.requestId} (${pending.clientId}), approving...`);
+        console.log(
+          `[setup] Pending device found: ${pending.requestId} (${pending.clientId}), approving...`,
+        );
         try {
           await execFileAsync("docker", [
-            "compose", "exec", "-T", "openclaw-gateway",
-            "openclaw", "devices", "approve", pending.requestId, ...cliArgs,
+            "compose",
+            "exec",
+            "-T",
+            "openclaw-gateway",
+            "openclaw",
+            "devices",
+            "approve",
+            pending.requestId,
+            ...cliArgs,
           ]);
           console.log(`[setup] Device ${pending.clientId} approved successfully`);
           approvedIds.add(pending.requestId);
           approvedCount++;
         } catch (err) {
-          console.warn(`[setup] Failed to approve ${pending.requestId}:`, err instanceof Error ? err.message : err);
+          console.warn(
+            `[setup] Failed to approve ${pending.requestId}:`,
+            err instanceof Error ? err.message : err,
+          );
         }
       }
 

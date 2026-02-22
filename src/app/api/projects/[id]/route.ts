@@ -17,25 +17,24 @@ function expandTilde(p: string): string {
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const pool = getPool();
-  const result = await pool.query<{ id: string; agent_id: string; name: string; workspace_path: string | null; created_at: string; meta: Record<string, unknown> }>(
-    `SELECT * FROM projects WHERE id = $1`, [id]
-  );
+  const result = await pool.query<{
+    id: string;
+    agent_id: string;
+    name: string;
+    workspace_path: string | null;
+    created_at: string;
+    meta: Record<string, unknown>;
+  }>(`SELECT * FROM projects WHERE id = $1`, [id]);
   if (result.rows.length === 0) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   return NextResponse.json(result.rows[0]);
 }
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
   const pool = getPool();
@@ -62,16 +61,13 @@ export async function PATCH(
   }
 
   vals.push(id);
-  await pool.query(
-    `UPDATE projects SET ${sets.join(", ")} WHERE id = $${idx}`,
-    vals
-  );
+  await pool.query(`UPDATE projects SET ${sets.join(", ")} WHERE id = $${idx}`, vals);
 
   // Refresh watchers if workspace_path changed
   if (body.workspace_path !== undefined) {
     refreshGsdWatchers();
     syncGatewayMounts().catch((err) =>
-      console.warn("[projects] Failed to sync gateway mounts:", err)
+      console.warn("[projects] Failed to sync gateway mounts:", err),
     );
   }
 
@@ -79,11 +75,11 @@ export async function PATCH(
   if (body.heartbeat !== undefined) {
     const { rows } = await pool.query<{ agent_id: string }>(
       `SELECT agent_id FROM projects WHERE id = $1`,
-      [id]
+      [id],
     );
     if (rows[0]?.agent_id) {
-      writeHeartbeatConfig(rows[0].agent_id, body.heartbeat as HeartbeatConfig).catch(
-        (err) => console.warn("[projects] Failed to write heartbeat config:", err)
+      writeHeartbeatConfig(rows[0].agent_id, body.heartbeat as HeartbeatConfig).catch((err) =>
+        console.warn("[projects] Failed to write heartbeat config:", err),
       );
     }
   }
@@ -91,16 +87,14 @@ export async function PATCH(
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const pool = getPool();
 
   // Look up agent_id before deleting the row
   const { rows } = await pool.query<{ agent_id: string }>(
-    `SELECT agent_id FROM projects WHERE id = $1`, [id]
+    `SELECT agent_id FROM projects WHERE id = $1`,
+    [id],
   );
   const agentId = rows[0]?.agent_id;
 
@@ -111,8 +105,15 @@ export async function DELETE(
   if (agentId) {
     try {
       await execFileAsync("docker", [
-        "compose", "exec", "openclaw-gateway",
-        "node", "openclaw.mjs", "agents", "delete", agentId, "--force",
+        "compose",
+        "exec",
+        "openclaw-gateway",
+        "node",
+        "openclaw.mjs",
+        "agents",
+        "delete",
+        agentId,
+        "--force",
       ]);
     } catch (err) {
       console.warn(`[projects] Failed to delete agent ${agentId}:`, err);
@@ -122,7 +123,7 @@ export async function DELETE(
   // Refresh GSD watchers to remove the deleted project's watcher
   refreshGsdWatchers();
   syncGatewayMounts().catch((err) =>
-    console.warn("[projects] Failed to sync gateway mounts:", err)
+    console.warn("[projects] Failed to sync gateway mounts:", err),
   );
 
   return NextResponse.json({ ok: true });

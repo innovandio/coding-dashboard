@@ -10,7 +10,12 @@ interface AiBrainSphereProps {
   size?: number;
 }
 
-export function AiBrainSphere({ isActive, isConnected = true, isThinking = false, size = 256 }: AiBrainSphereProps) {
+export function AiBrainSphere({
+  isActive,
+  isConnected = true,
+  isThinking = false,
+  size = 256,
+}: AiBrainSphereProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef(isActive);
   const connectedRef = useRef(isConnected);
@@ -62,7 +67,7 @@ export function AiBrainSphere({ isActive, isConnected = true, isThinking = false
     const orangeGroup = new Float32Array(PARTICLE_COUNT);
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
-      const phi = Math.acos(1 - 2 * (i + 0.5) / PARTICLE_COUNT);
+      const phi = Math.acos(1 - (2 * (i + 0.5)) / PARTICLE_COUNT);
       const theta = Math.PI * (1 + Math.sqrt(5)) * i;
       const r = BASE_RADIUS + (Math.random() - 0.5) * 0.25;
 
@@ -210,17 +215,15 @@ export function AiBrainSphere({ isActive, isConnected = true, isThinking = false
       }
     }
 
-    synapseGeo.setAttribute(
-      "position",
-      new THREE.BufferAttribute(synPositions, 3)
-    );
-    synapseGeo.setAttribute(
-      "color",
-      new THREE.BufferAttribute(synColors, 3)
-    );
+    synapseGeo.setAttribute("position", new THREE.BufferAttribute(synPositions, 3));
+    synapseGeo.setAttribute("color", new THREE.BufferAttribute(synColors, 3));
 
     const synapseMat = new THREE.ShaderMaterial({
-      uniforms: { uTime: { value: 0 }, uActive: { value: isActive ? 1.0 : 0.0 }, uConnected: { value: isConnected ? 1.0 : 0.0 } },
+      uniforms: {
+        uTime: { value: 0 },
+        uActive: { value: isActive ? 1.0 : 0.0 },
+        uConnected: { value: isConnected ? 1.0 : 0.0 },
+      },
       vertexShader: `
         attribute vec3 color;
         varying vec3 vColor;
@@ -263,7 +266,12 @@ export function AiBrainSphere({ isActive, isConnected = true, isThinking = false
     // --- Inner Core Glow (only visible when active) ---
     const coreGeo = new THREE.SphereGeometry(0.35, 32, 32);
     const coreMat = new THREE.ShaderMaterial({
-      uniforms: { uTime: { value: 0 }, uActive: { value: isActive ? 1.0 : 0.0 }, uConnected: { value: isConnected ? 1.0 : 0.0 }, uThinking: { value: isThinking ? 1.0 : 0.0 } },
+      uniforms: {
+        uTime: { value: 0 },
+        uActive: { value: isActive ? 1.0 : 0.0 },
+        uConnected: { value: isConnected ? 1.0 : 0.0 },
+        uThinking: { value: isThinking ? 1.0 : 0.0 },
+      },
       vertexShader: `
         varying vec3 vNormal;
         void main() {
@@ -357,11 +365,5 @@ export function AiBrainSphere({ isActive, isConnected = true, isThinking = false
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size]);
 
-  return (
-    <div
-      ref={containerRef}
-      style={{ width: size, height: size }}
-      className="flex-shrink-0"
-    />
-  );
+  return <div ref={containerRef} style={{ width: size, height: size }} className="flex-shrink-0" />;
 }

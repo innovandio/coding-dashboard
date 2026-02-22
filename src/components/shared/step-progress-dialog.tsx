@@ -72,9 +72,7 @@ export function StepProgressDialog({
               </div>
               <div className="min-w-0">
                 <p className="text-sm">{step.label}</p>
-                {step.error && (
-                  <p className="text-xs text-destructive mt-0.5">{step.error}</p>
-                )}
+                {step.error && <p className="text-xs text-destructive mt-0.5">{step.error}</p>}
               </div>
             </div>
           ))}

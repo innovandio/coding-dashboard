@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from "@/components/ui/resizable";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { TaskBoard } from "@/components/gsd/task-board";
 import { ChatPanel } from "@/components/chat/chat-panel";
 import { PtyPanel } from "@/components/terminal/pty-panel";
@@ -40,7 +36,12 @@ export function DashboardShell({
               <TaskBoard tasks={gsdTasks} />
             </div>
             <div className="w-[335px] shrink-0 border-l border-border flex flex-col items-center justify-center bg-card relative">
-              <AiBrainSphere isActive={agentActive} isConnected={connectionState === "connected"} isThinking={terminalThinking} size={256} />
+              <AiBrainSphere
+                isActive={agentActive}
+                isConnected={connectionState === "connected"}
+                isThinking={terminalThinking}
+                size={256}
+              />
               <span className="absolute bottom-4">
                 <ConnectionDot status={connectionState} />
               </span>

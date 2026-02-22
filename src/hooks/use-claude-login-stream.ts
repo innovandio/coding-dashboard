@@ -35,14 +35,18 @@ export function useClaudeLoginStream(enabled: boolean) {
         const payload = JSON.parse((e as MessageEvent).data);
         if (payload.state) setLoginState(payload.state);
         if (typeof payload.exitCode === "number") setExitCode(payload.exitCode);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     });
 
     es.addEventListener("oauth-url", (e) => {
       try {
         const payload = JSON.parse((e as MessageEvent).data);
         if (payload.url) setOAuthUrl(payload.url);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     });
 
     es.addEventListener("exit", (e) => {
@@ -50,7 +54,9 @@ export function useClaudeLoginStream(enabled: boolean) {
         const payload = JSON.parse((e as MessageEvent).data);
         setLoginState("exited");
         setExitCode(payload.exitCode ?? 1);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     });
 
     return () => es.close();

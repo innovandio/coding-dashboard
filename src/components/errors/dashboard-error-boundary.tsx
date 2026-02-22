@@ -31,9 +31,7 @@ export class DashboardErrorBoundary extends Component<Props, State> {
       return (
         <div className="flex-1 flex items-center justify-center bg-background">
           <div className="text-center space-y-4 max-w-md px-6">
-            <h2 className="text-lg font-semibold text-foreground">
-              Something went wrong
-            </h2>
+            <h2 className="text-lg font-semibold text-foreground">Something went wrong</h2>
             <p className="text-sm text-muted-foreground">
               {this.state.error?.message || "An unexpected error occurred in the dashboard."}
             </p>

@@ -10,7 +10,11 @@ import { ChatInput } from "./chat-input";
 import { useAgentActivity } from "@/components/activity/use-agent-activity";
 import { formatArgsSummary } from "@/lib/format-args";
 import { parseToolEvent, isToolComplete } from "@/lib/parse-tool-event";
-import type { ConversationTurn, ConversationToolCall, TurnError } from "@/app/api/chat/activity/route";
+import type {
+  ConversationTurn,
+  ConversationToolCall,
+  TurnError,
+} from "@/app/api/chat/activity/route";
 import { stripAnsi } from "@/lib/utils";
 import { toast } from "sonner";
 import type { BusEvent } from "@/lib/event-bus";
@@ -61,13 +65,7 @@ type DisplayItem =
       error?: TurnError;
     };
 
-export function ChatPanel({
-  projectId,
-  events,
-}: {
-  projectId: string | null;
-  events: BusEvent[];
-}) {
+export function ChatPanel({ projectId, events }: { projectId: string | null; events: BusEvent[] }) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionKey, setSessionKey] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
@@ -125,9 +123,7 @@ export function ChatPanel({
   const fetchTurns = useCallback(async () => {
     if (!sessionKey) return;
     try {
-      const res = await fetch(
-        `/api/chat/activity?session_key=${encodeURIComponent(sessionKey)}`
-      );
+      const res = await fetch(`/api/chat/activity?session_key=${encodeURIComponent(sessionKey)}`);
       if (!res.ok) return;
       const data = await res.json();
       setHistoryTurns(data.turns ?? []);
@@ -209,10 +205,7 @@ export function ChatPanel({
 
     for (const ev of matchingEvents) {
       const payload = ev.payload as Record<string, unknown>;
-      const numericId =
-        typeof ev.id === "number"
-          ? ev.id
-          : parseInt(String(ev.id), 10) || 0;
+      const numericId = typeof ev.id === "number" ? ev.id : parseInt(String(ev.id), 10) || 0;
 
       if (ev.event_type === "chat") {
         const role = payload.role as string | undefined;
@@ -232,9 +225,7 @@ export function ChatPanel({
 
         const runId = payload.runId as string | undefined;
         const state = payload.state as string | undefined;
-        const msgPayload = payload.message as
-          | Record<string, unknown>
-          | undefined;
+        const msgPayload = payload.message as Record<string, unknown> | undefined;
 
         if (runId && msgPayload) {
           const run = getOrCreateRun(runId, numericId);
@@ -286,9 +277,7 @@ export function ChatPanel({
                 id: t.toolUseId,
                 name: t.toolName,
                 arguments: t.args ?? {},
-                argsSummary: t.args
-                  ? formatArgsSummary(t.toolName, t.args)
-                  : "",
+                argsSummary: t.args ? formatArgsSummary(t.toolName, t.args) : "",
                 result: null,
                 isError: false,
               };
@@ -374,18 +363,15 @@ export function ChatPanel({
       if (item.type === "assistant" && !item.isStreaming) {
         // Skip if history already contains this content
         const textSnippet = item.text.slice(0, 80);
-        const alreadyInHistory = textSnippet && items.some(
-          (h) => h.type === "assistant" && h.text.includes(textSnippet)
-        );
+        const alreadyInHistory =
+          textSnippet && items.some((h) => h.type === "assistant" && h.text.includes(textSnippet));
         if (alreadyInHistory) continue;
       }
       if (item.type === "user") {
         // Skip messages from before the last history fetch
         if (item.ts && item.ts < historyFetchedAt.current) continue;
         const text = item.text.trim();
-        const alreadyInHistory = items.some(
-          (h) => h.type === "user" && h.text.includes(text)
-        );
+        const alreadyInHistory = items.some((h) => h.type === "user" && h.text.includes(text));
         if (alreadyInHistory) continue;
       }
       items.push(item);
@@ -393,17 +379,11 @@ export function ChatPanel({
     return items;
   }, [historyTurns, liveItems]);
 
-  const isStreaming = liveItems.some(
-    (item) => item.type === "assistant" && item.isStreaming
-  );
+  const isStreaming = liveItems.some((item) => item.type === "assistant" && item.isStreaming);
 
   const historyToolCount = useMemo(
-    () =>
-      historyTurns.reduce(
-        (n, t) => n + (t.toolCalls?.length ?? 0),
-        0
-      ),
-    [historyTurns]
+    () => historyTurns.reduce((n, t) => n + (t.toolCalls?.length ?? 0), 0),
+    [historyTurns],
   );
 
   // Auto-scroll
@@ -424,7 +404,7 @@ export function ChatPanel({
         toast.error("Failed to send message");
       }
     },
-    [sessionId, sessionKey]
+    [sessionId, sessionKey],
   );
 
   const handleAbort = useCallback(async () => {
@@ -441,9 +421,7 @@ export function ChatPanel({
   }, [sessionKey]);
 
   const lastRunStart =
-    runs.length > 0 && lifecycleState === "running"
-      ? runs[runs.length - 1].startedAt
-      : null;
+    runs.length > 0 && lifecycleState === "running" ? runs[runs.length - 1].startedAt : null;
 
   return (
     <Card className="h-full rounded-none border-0 flex flex-col gap-0 py-0">
@@ -472,23 +450,14 @@ export function ChatPanel({
               </p>
             )}
             {projectId && resolving && (
+              <p className="text-xs text-muted-foreground px-3 py-4 text-center">Connecting...</p>
+            )}
+            {error && <p className="text-xs text-destructive px-3 py-4 text-center">{error}</p>}
+            {projectId && !resolving && !error && allItems.length === 0 && (
               <p className="text-xs text-muted-foreground px-3 py-4 text-center">
-                Connecting...
+                Send a message to start the conversation
               </p>
             )}
-            {error && (
-              <p className="text-xs text-destructive px-3 py-4 text-center">
-                {error}
-              </p>
-            )}
-            {projectId &&
-              !resolving &&
-              !error &&
-              allItems.length === 0 && (
-                <p className="text-xs text-muted-foreground px-3 py-4 text-center">
-                  Send a message to start the conversation
-                </p>
-              )}
             {allItems.map((item) =>
               item.type === "user" ? (
                 <ChatMessage
@@ -508,7 +477,7 @@ export function ChatPanel({
                   isStreaming={item.isStreaming}
                   error={item.error}
                 />
-              )
+              ),
             )}
             <div ref={bottomRef} />
           </div>

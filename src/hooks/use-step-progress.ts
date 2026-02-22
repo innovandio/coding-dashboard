@@ -25,94 +25,97 @@ export function useStepProgress() {
     setResultData(null);
   }, []);
 
-  const start = useCallback(async (url: string, init?: RequestInit) => {
-    // Abort any previous stream
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
+  const start = useCallback(
+    async (url: string, init?: RequestInit) => {
+      // Abort any previous stream
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-    reset();
+      reset();
 
-    try {
-      const res = await fetch(url, {
-        ...init,
-        signal: controller.signal,
-      });
+      try {
+        const res = await fetch(url, {
+          ...init,
+          signal: controller.signal,
+        });
 
-      if (!res.ok) {
-        let message = `HTTP ${res.status}`;
-        try {
-          const body = await res.json();
-          if (body.error) message = body.error;
-        } catch {}
-        setGlobalError(message);
-        setDone(true);
-        setSuccess(false);
-        return;
-      }
-
-      const reader = res.body?.getReader();
-      if (!reader) {
-        setGlobalError("No response stream");
-        setDone(true);
-        setSuccess(false);
-        return;
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done: streamDone, value } = await reader.read();
-        if (streamDone) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
+        if (!res.ok) {
+          let message = `HTTP ${res.status}`;
           try {
-            const event: ProgressEvent = JSON.parse(line);
-            if ("done" in event && (event as DoneEvent).done) {
-              const doneEvt = event as DoneEvent;
-              setDone(true);
-              setSuccess(doneEvt.success);
-              if (doneEvt.data) setResultData(doneEvt.data);
-              if (doneEvt.error && !doneEvt.success) {
-                setGlobalError(doneEvt.error);
-              }
-            } else {
-              const stepEvt = event as StepEvent;
-              setSteps((prev) => {
-                const next = [...prev];
-                // Grow array if needed
-                while (next.length <= stepEvt.step) {
-                  next.push({ label: "", status: "pending" });
+            const body = await res.json();
+            if (body.error) message = body.error;
+          } catch {}
+          setGlobalError(message);
+          setDone(true);
+          setSuccess(false);
+          return;
+        }
+
+        const reader = res.body?.getReader();
+        if (!reader) {
+          setGlobalError("No response stream");
+          setDone(true);
+          setSuccess(false);
+          return;
+        }
+
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done: streamDone, value } = await reader.read();
+          if (streamDone) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const event: ProgressEvent = JSON.parse(line);
+              if ("done" in event && (event as DoneEvent).done) {
+                const doneEvt = event as DoneEvent;
+                setDone(true);
+                setSuccess(doneEvt.success);
+                if (doneEvt.data) setResultData(doneEvt.data);
+                if (doneEvt.error && !doneEvt.success) {
+                  setGlobalError(doneEvt.error);
                 }
-                next[stepEvt.step] = {
-                  label: stepEvt.label ?? next[stepEvt.step].label,
-                  status: stepEvt.status,
-                  error: stepEvt.error,
-                };
-                return next;
-              });
-              if (stepEvt.data) {
-                setResultData((prev) => ({ ...prev, ...stepEvt.data }));
+              } else {
+                const stepEvt = event as StepEvent;
+                setSteps((prev) => {
+                  const next = [...prev];
+                  // Grow array if needed
+                  while (next.length <= stepEvt.step) {
+                    next.push({ label: "", status: "pending" });
+                  }
+                  next[stepEvt.step] = {
+                    label: stepEvt.label ?? next[stepEvt.step].label,
+                    status: stepEvt.status,
+                    error: stepEvt.error,
+                  };
+                  return next;
+                });
+                if (stepEvt.data) {
+                  setResultData((prev) => ({ ...prev, ...stepEvt.data }));
+                }
               }
+            } catch {
+              // Skip malformed lines
             }
-          } catch {
-            // Skip malformed lines
           }
         }
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        setGlobalError(err instanceof Error ? err.message : "Network error");
+        setDone(true);
+        setSuccess(false);
       }
-    } catch (err) {
-      if ((err as Error).name === "AbortError") return;
-      setGlobalError(err instanceof Error ? err.message : "Network error");
-      setDone(true);
-      setSuccess(false);
-    }
-  }, [reset]);
+    },
+    [reset],
+  );
 
   // Cleanup on unmount
   const cleanup = useCallback(() => {

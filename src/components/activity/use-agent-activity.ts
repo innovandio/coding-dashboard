@@ -100,7 +100,12 @@ export function useAgentActivity(events: BusEvent[]): AgentActivityState {
           if (phase === "start" || phase === "started") {
             run.startedAt = ts;
             run.state = "running";
-          } else if (phase === "end" || phase === "ended" || phase === "done" || phase === "complete") {
+          } else if (
+            phase === "end" ||
+            phase === "ended" ||
+            phase === "done" ||
+            phase === "complete"
+          ) {
             run.endedAt = ts;
             run.state = "done";
           } else if (phase === "error" || phase === "failed") {
