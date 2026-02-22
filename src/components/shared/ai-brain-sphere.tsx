@@ -331,7 +331,7 @@ export function AiBrainSphere({ isActive, isConnected = true, isThinking = false
       // Accumulate rotation via delta — speed changes don't cause jumps
       // Stop rotation when disconnected
       const rotSpeed = (0.08 + activeSmooth * 0.04) * connectedSmooth;
-      rotY += dt * rotSpeed;
+      rotY -= dt * rotSpeed;
       particles.rotation.y = rotY;
       particles.rotation.x = Math.sin(rotY * 0.6) * (0.05 + activeSmooth * 0.08);
       synapses.rotation.copy(particles.rotation);

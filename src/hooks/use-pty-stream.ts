@@ -122,12 +122,21 @@ export function usePtyStream(projectId: string | null) {
     const params = new URLSearchParams({ projectId });
     const es = new EventSource(`/api/pty/stream?${params}`);
 
-    // Detect Claude Code's thinking spinner (color 174 = salmon) to
-    // drive the thinking indicator. Resets after 1s of no spinner frames.
-    const SPINNER_COLOR = "\x1b[38;5;174m";
+    // Detect Claude Code's thinking spinner (color 174 = salmon + spinner
+    // glyph) to drive the thinking indicator. Resets after 1s of no frames.
+    // The spinner cycles through: ✻ ✶ * ✢ — match color 174 followed by
+    // one of these characters to avoid false positives on startup output.
+    const SPINNER_RE = /\x1b\[38;5;174m[✻✶*✢·]/;
     let activityTimer: ReturnType<typeof setTimeout> | null = null;
+    // Suppress spinner detection during the initial buffer replay that
+    // happens right after SSE connect — replayed data from a previous
+    // session may contain stale spinner frames.
+    let replayDone = false;
 
-    es.onopen = () => setConnected(true);
+    es.onopen = () => {
+      setConnected(true);
+      setTimeout(() => { replayDone = true; }, 500);
+    };
     es.onerror = () => setConnected(false);
 
     // Parse OSC title sequences: \x1b]0;title\x07 or \x1b]2;title\x07
@@ -157,7 +166,7 @@ export function usePtyStream(projectId: string | null) {
             }
           }
 
-          if (payload.data.includes(SPINNER_COLOR)) {
+          if (replayDone && SPINNER_RE.test(payload.data)) {
             setHasActivity(true);
             if (activityTimer) clearTimeout(activityTimer);
             activityTimer = setTimeout(() => setHasActivity(false), 1000);
