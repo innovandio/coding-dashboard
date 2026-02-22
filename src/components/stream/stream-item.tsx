@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { JsonViewer } from "@/components/shared/json-viewer";
+import { stripAnsi } from "@/lib/utils";
 import type { BusEvent } from "@/lib/event-bus";
 
 function formatTime(iso: string): string {
@@ -20,10 +21,10 @@ function formatTime(iso: string): string {
 
 function getSummary(ev: BusEvent): string {
   const p = ev.payload;
-  if (typeof p.message === "string") return p.message;
-  if (typeof p.text === "string") return p.text;
-  if (typeof p.summary === "string") return p.summary;
-  if (typeof p.content === "string") return p.content.slice(0, 120);
+  if (typeof p.message === "string") return stripAnsi(p.message);
+  if (typeof p.text === "string") return stripAnsi(p.text);
+  if (typeof p.summary === "string") return stripAnsi(p.summary);
+  if (typeof p.content === "string") return stripAnsi(p.content).slice(0, 120);
   if (typeof p.tool === "string") return `tool: ${p.tool}`;
   if (typeof p.method === "string") return `method: ${p.method}`;
   return ev.event_type;

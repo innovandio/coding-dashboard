@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendGatewayRequest } from "@/lib/gateway-ingestor";
 import { formatArgsSummary } from "@/lib/format-args";
+import { stripAnsi } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -65,12 +66,6 @@ function parseErrorMessage(raw: string): { type: string; message: string } {
     // ignore parse errors
   }
   return { type: "unknown_error", message: raw };
-}
-
-/** Strip ANSI escape sequences (SGR, cursor movement, DEC private mode, etc.) */
-function stripAnsi(str: string): string {
-  // eslint-disable-next-line no-control-regex
-  return str.replace(/\x1B\[[\?]?[0-9;]*[a-zA-Z]|\x1B\][^\x07]*\x07|\x1B[()][A-Z0-9]/g, "");
 }
 
 /**

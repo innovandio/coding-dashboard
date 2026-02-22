@@ -11,6 +11,7 @@ import { useAgentActivity } from "@/components/activity/use-agent-activity";
 import { formatArgsSummary } from "@/lib/format-args";
 import { parseToolEvent, isToolComplete } from "@/lib/parse-tool-event";
 import type { ConversationTurn, ConversationToolCall, TurnError } from "@/app/api/chat/activity/route";
+import { stripAnsi } from "@/lib/utils";
 import type { BusEvent } from "@/lib/event-bus";
 
 interface ContentBlock {
@@ -214,7 +215,7 @@ export function ChatPanel({
         const role = payload.role as string | undefined;
         if (role === "user") {
           const { text: rawText } = extractContent(payload.content);
-          const text = stripGatewayWrapper(rawText);
+          const text = stripGatewayWrapper(stripAnsi(rawText));
           const ts = ev.created_at ? new Date(ev.created_at).getTime() : 0;
           orderedItems.push({
             eventId: numericId,

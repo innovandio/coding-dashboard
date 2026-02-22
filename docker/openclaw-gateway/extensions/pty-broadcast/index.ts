@@ -117,7 +117,8 @@ async function wrapNodePty() {
     };
 
     activeRuns.set(runId, activeRun);
-    ptyBus.emit("started", { ...meta, pid: ptyHandle.pid });
+    const command = Array.isArray(args) ? [file, ...args].join(" ") : `${file} ${args ?? ""}`.trim();
+    ptyBus.emit("started", { ...meta, pid: ptyHandle.pid, command });
 
     ptyHandle.onData((data: string) => {
       ptyBus.emit("data", { ...meta, data: data.toString() });
@@ -145,9 +146,9 @@ export default function register(api: OpenClawPluginApi) {
     if (broadcast) return;
     broadcast = broadcastFn;
 
-    ptyBus.on("started", (evt) => broadcast!("pty.started", evt, { dropIfSlow: true }));
+    ptyBus.on("started", (evt) => broadcast!("pty.started", evt));
     ptyBus.on("data", (evt) => broadcast!("pty.data", evt, { dropIfSlow: true }));
-    ptyBus.on("exited", (evt) => broadcast!("pty.exited", evt, { dropIfSlow: true }));
+    ptyBus.on("exited", (evt) => broadcast!("pty.exited", evt));
   }
 
   // Capture agent context before each tool call so the pty.spawn wrapper can

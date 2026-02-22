@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ConnectionDot } from "@/components/shared/connection-dot";
 import { usePtyStream } from "@/hooks/use-pty-stream";
 import { Settings } from "lucide-react";
@@ -74,12 +81,16 @@ export function PtyPanel({
   projectId: string | null;
   onThinkingChange?: (thinking: boolean) => void;
 }) {
-  const { setTerminal, connected, hasActivity, activeRuns, sendInputToAll } = usePtyStream(projectId);
+  const { setTerminal, connected, hasActivity, allRuns, selectedRunId, selectRun, sendInput } = usePtyStream(projectId);
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<import("@xterm/addon-fit").FitAddon | null>(null);
-  const sendInputToAllRef = useRef(sendInputToAll);
-  sendInputToAllRef.current = sendInputToAll;
+
+  // Refs for values used inside terminal.onData callback
+  const selectedRunIdRef = useRef(selectedRunId);
+  selectedRunIdRef.current = selectedRunId;
+  const sendInputRef = useRef(sendInput);
+  sendInputRef.current = sendInput;
 
   // Ping-back settings (per project)
   const [pingBackEnabled, setPingBackEnabled] = useState(false);
@@ -106,12 +117,17 @@ export function PtyPanel({
 
   // Resize PTY when new processes appear — they're spawned at gateway
   // default dimensions which may differ from the browser terminal.
+  const activeCount = useMemo(
+    () => allRuns.filter((r) => r.active).length,
+    [allRuns],
+  );
+
   useEffect(() => {
     const t = terminalRef.current;
-    if (activeRuns.size > 0 && t) {
+    if (activeCount > 0 && t) {
       sendPtyResize(t.cols, t.rows);
     }
-  }, [activeRuns]);
+  }, [activeCount]);
 
   const handlePingBackToggle = useCallback((checked: boolean) => {
     setPingBackEnabled(checked);
@@ -163,9 +179,12 @@ export function PtyPanel({
         sendPtyResize(term.cols, term.rows);
       }
 
-      // Forward user keystrokes to all active PTY processes.
+      // Forward user keystrokes to the selected PTY process.
       term.onData((data) => {
-        sendInputToAllRef.current(data);
+        const runId = selectedRunIdRef.current;
+        if (runId) {
+          sendInputRef.current(runId, data);
+        }
       });
 
       terminalRef.current = term;
@@ -216,10 +235,29 @@ export function PtyPanel({
               {projectId}
             </Badge>
           )}
-          {activeRuns.size > 0 && (
-            <Badge variant="outline" className="text-[10px] h-4">
-              {activeRuns.size} {activeRuns.size === 1 ? "process" : "processes"}
-            </Badge>
+          {allRuns.length > 0 && (
+            <Select value={selectedRunId ?? undefined} onValueChange={selectRun}>
+              <SelectTrigger size="sm" className="!h-4 text-[10px] border-0 bg-transparent shadow-none gap-1 px-1.5 min-w-0 w-auto !py-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {allRuns.map((run) => {
+                  const name = run.title || run.command || run.label || `Process ${run.index}`;
+                  return (
+                    <SelectItem key={run.runId} value={run.runId} className="text-xs">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                            run.active ? "bg-green-500" : "bg-muted-foreground/30"
+                          }`}
+                        />
+                        {name}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
           )}
           <div className="ml-auto flex items-center gap-2">
             {connected && (

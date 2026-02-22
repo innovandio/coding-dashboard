@@ -21,6 +21,7 @@ export interface PtyLifecycleEvent {
   projectId?: string;
   backendId?: string;
   label?: string;
+  command?: string;
   pid?: number;
 }
 
@@ -33,9 +34,15 @@ interface RunBuffer {
   totalBytes: number;
 }
 
+interface RunMeta {
+  label?: string;
+  command?: string;
+}
+
 const globalForPty = globalThis as unknown as {
   ptyEmitter?: EventEmitter;
   ptyScreenBuffers?: Map<string, RunBuffer>;
+  ptyRunMeta?: Map<string, RunMeta>;
 };
 
 function getScreenBuffers(): Map<string, RunBuffer> {
@@ -43,6 +50,24 @@ function getScreenBuffers(): Map<string, RunBuffer> {
     globalForPty.ptyScreenBuffers = new Map();
   }
   return globalForPty.ptyScreenBuffers;
+}
+
+function getMetaMap(): Map<string, RunMeta> {
+  if (!globalForPty.ptyRunMeta) {
+    globalForPty.ptyRunMeta = new Map();
+  }
+  return globalForPty.ptyRunMeta;
+}
+
+/** Return metadata (label, command) for a specific run. */
+export function getRunMeta(runId: string): RunMeta | undefined {
+  return getMetaMap().get(runId);
+}
+
+/** Remove a stale run's buffer and metadata. */
+export function deleteRunBuffer(runId: string): void {
+  getScreenBuffers().delete(runId);
+  getMetaMap().delete(runId);
 }
 
 /** Return buffered output for all active runs belonging to a project. */
@@ -86,11 +111,16 @@ export function getPtyEmitter(): EventEmitter {
       if (!buffers.has(evt.runId)) {
         buffers.set(evt.runId, { projectId: evt.projectId, chunks: [], totalBytes: 0 });
       }
+      const metaMap = getMetaMap();
+      metaMap.set(evt.runId, { label: evt.label, command: evt.command });
     });
 
-    // Clean up buffer when run exits
+    // Clean up buffer and metadata when run exits
     emitter.on("pty.exited", (evt: PtyLifecycleEvent) => {
-      if (evt.runId) buffers.delete(evt.runId);
+      if (evt.runId) {
+        buffers.delete(evt.runId);
+        getMetaMap().delete(evt.runId);
+      }
     });
 
     globalForPty.ptyEmitter = emitter;

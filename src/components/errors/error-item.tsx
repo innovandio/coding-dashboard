@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { JsonViewer } from "@/components/shared/json-viewer";
+import { stripAnsi } from "@/lib/utils";
 import type { BusEvent } from "@/lib/event-bus";
 
 function formatTime(iso: string): string {
@@ -31,9 +32,9 @@ function getSeverity(ev: BusEvent): "error" | "warn" {
 
 function getMessage(ev: BusEvent): string {
   const p = ev.payload;
-  if (typeof p.error === "string") return p.error;
-  if (typeof p.message === "string") return p.message;
-  if (typeof p.text === "string") return p.text;
+  if (typeof p.error === "string") return stripAnsi(p.error);
+  if (typeof p.message === "string") return stripAnsi(p.message);
+  if (typeof p.text === "string") return stripAnsi(p.text);
   return ev.event_type;
 }
 
