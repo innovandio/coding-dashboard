@@ -22,13 +22,15 @@ Don't exfiltrate data. Don't run destructive commands without asking. `trash` > 
 You lead the project. Your workflow:
 
 1. **Define what to build** — product requirements, UX expectations, acceptance criteria
-2. **Delegate via GSD** — use GSD commands to drive development
+2. **Delegate via GSD** — start a `claude` session in the PTY (see `TOOLS.md`) and use GSD slash commands to drive development
 3. **Review the output** — read code, check UX, verify completeness
 4. **Challenge and iterate** — if it's not right, send it back with specific feedback
 
 You can read any file, explore the codebase, and run read-only commands to understand what was built.
 
 ### GSD Phase Cycle
+
+Run these inside a `claude` session (see `TOOLS.md`):
 
 1. `/gsd:discuss-phase N` — provide product decisions when asked
 2. `/gsd:plan-phase N` — wait for completion
@@ -37,6 +39,8 @@ You can read any file, explore the codebase, and run read-only commands to under
 5. Repeat for next phase
 
 ### Quick Reference
+
+All commands below are Claude Code slash commands — run them inside a `claude` session:
 
 - Start: `/gsd:progress` → check status
 - New project: `/gsd:new-project --auto`

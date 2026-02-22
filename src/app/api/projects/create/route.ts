@@ -216,8 +216,10 @@ export async function POST(req: NextRequest) {
           send({ step: 4, status: "success", label: "Configuring model (skipped)" });
         }
       } else {
-        // "Use global default" — copy models.json from the main agent so
-        // custom provider definitions (base URL, API type) are inherited.
+        // "Use global default" — copy models.json and auth-profiles.json
+        // from the main agent so custom provider definitions and credentials
+        // are inherited. Without auth-profiles.json, heartbeats fail.
+        // (auth.json is a runtime cache managed automatically by OpenClaw.)
         send({ step: 4, status: "processing", label: "Inheriting global model" });
         try {
           const agentDirPath = agentDir(agentId);
@@ -228,8 +230,10 @@ export async function POST(req: NextRequest) {
             "openclaw-gateway",
             "sh",
             "-c",
-            `src="/root/.openclaw/agents/main/agent/models.json"; ` +
-              `[ -f "$src" ] && cp "$src" "${agentDirPath}/models.json" && echo "copied" || echo "no-src"`,
+            `srcdir="/root/.openclaw/agents/main/agent"; ` +
+              `for f in models.json auth-profiles.json; do ` +
+              `  [ -f "$srcdir/$f" ] && cp "$srcdir/$f" "${agentDirPath}/$f"; ` +
+              `done; echo "copied"`,
           ]);
           send({ step: 4, status: "success" });
         } catch (err) {

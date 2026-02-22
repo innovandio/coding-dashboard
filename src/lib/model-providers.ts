@@ -54,7 +54,7 @@ export async function fetchModelCatalog(): Promise<ProviderGroup[]> {
 export async function setDefaultModel(modelKey: string, agentId?: string): Promise<void> {
   const args = ["compose", "exec", "-T", "openclaw-gateway", "openclaw", "models", "set", modelKey];
   if (agentId) {
-    args.splice(4, 0, "--agent", agentId);
+    args.splice(5, 0, "--agent", agentId);
   }
   await execFileAsync("docker", args, { timeout: 15000 });
 }
@@ -81,7 +81,7 @@ export async function pasteAuthToken(
     provider,
   ];
   if (agentId) {
-    args.splice(4, 0, "--agent", agentId);
+    args.splice(5, 0, "--agent", agentId);
   }
   await new Promise<void>((resolve, reject) => {
     const child = execFile("docker", args, { timeout: 15000 }, (err) => {
@@ -207,7 +207,7 @@ export async function writeCustomProviderConfig(params: {
     modelKey,
   ];
   if (agentId) {
-    setArgs.splice(4, 0, "--agent", agentId);
+    setArgs.splice(5, 0, "--agent", agentId);
   }
   await execFileAsync("docker", setArgs, { timeout: 15000 });
 }
