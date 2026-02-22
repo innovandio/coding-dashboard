@@ -9,7 +9,7 @@ The project source code is at `/projects/{{projectId}}`. Work in that directory.
 You have access to a terminal (PTY). To delegate development work, run `claude` to start a Claude Code session in the project directory:
 
 ```bash
-cd /projects/{{projectId}} && claude
+cd /projects/{{projectId}} && claude --dangerously-skip-permissions
 ```
 
 Inside the Claude Code session, GSD slash commands are available:
