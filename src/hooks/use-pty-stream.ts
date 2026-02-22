@@ -90,6 +90,11 @@ export function usePtyStream(projectId: string | null) {
     const params = new URLSearchParams({ projectId });
     const es = new EventSource(`/api/pty/stream?${params}`);
 
+    // Detect Claude Code's thinking spinner (color 174 = salmon) to
+    // drive the thinking indicator. Resets after 3s of no spinner frames.
+    const SPINNER_COLOR = "\x1b[38;5;174m";
+    let activityTimer: ReturnType<typeof setTimeout> | null = null;
+
     es.onopen = () => setConnected(true);
     es.onerror = () => setConnected(false);
 
@@ -99,7 +104,11 @@ export function usePtyStream(projectId: string | null) {
         const payload = JSON.parse(e.data);
         if (payload.data) {
           writeToTerminal(payload.data);
-          setHasActivity(true);
+          if (payload.data.includes(SPINNER_COLOR)) {
+            setHasActivity(true);
+            if (activityTimer) clearTimeout(activityTimer);
+            activityTimer = setTimeout(() => setHasActivity(false), 1000);
+          }
         }
       } catch { /* ignore parse errors */ }
     };
@@ -112,7 +121,6 @@ export function usePtyStream(projectId: string | null) {
           setActiveRuns(new Set(runs));
         }
       } catch { /* ignore */ }
-      setHasActivity(true);
     });
 
     es.addEventListener("exited", (e) => {
@@ -124,11 +132,14 @@ export function usePtyStream(projectId: string | null) {
         }
         writeToTerminal("\r\n\x1b[90m[process exited]\x1b[0m\r\n");
       } catch { /* ignore */ }
+      setHasActivity(false);
+      if (activityTimer) clearTimeout(activityTimer);
     });
 
     return () => {
       es.close();
       setConnected(false);
+      if (activityTimer) clearTimeout(activityTimer);
       pendingWrites.current = [];
     };
   }, [projectId, writeToTerminal]);
