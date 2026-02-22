@@ -30,6 +30,7 @@ jobs:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
           GATEWAY_WS_URL: ws://localhost:18789
           GATEWAY_TOKEN: ci-dummy-token
+          AUTH_SECRET: ci-dummy-secret-at-least-32-chars-long
 
   secrets:
     name: Secret Scanning

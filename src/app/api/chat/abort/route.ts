@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendGatewayRequest } from "@/lib/gateway-ingestor";
+import { requireAuth } from "@/lib/auth-utils";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  const session = await requireAuth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { sessionKey } = await req.json();
   if (!sessionKey) {
     return NextResponse.json({ error: "sessionKey required" }, { status: 400 });

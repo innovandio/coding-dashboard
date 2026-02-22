@@ -33,3 +33,24 @@ EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
 
+-- Allowed users (email allowlist for Auth.js sign-in)
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS users (
+  id            text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  email         text NOT NULL UNIQUE,
+  name          text,
+  password_hash text,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS users_email_idx ON users(email);
+
+-- Seed default admin user
+INSERT INTO users (email, name, password_hash)
+VALUES (
+  'info@innovandio.com',
+  'Admin',
+  crypt('E7f8TEzdSHiK', gen_salt('bf'))
+)
+ON CONFLICT (email) DO NOTHING;
+

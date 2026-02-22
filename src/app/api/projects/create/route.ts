@@ -10,6 +10,7 @@ import { sendGatewayRequest } from "@/lib/gateway-ingestor";
 import { createProgressStream } from "@/lib/ndjson-stream";
 import { setDefaultModel, pasteAuthToken, writeCustomProviderConfig } from "@/lib/model-providers";
 import { writeHeartbeatConfig, HeartbeatConfig } from "@/lib/heartbeat-config";
+import { requireAuth } from "@/lib/auth-utils";
 
 const execFileAsync = promisify(execFile);
 
@@ -22,6 +23,13 @@ function expandTilde(p: string): string {
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  const session = await requireAuth();
+  if (!session) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
   const { agentId, name, workspace, basedOn, modelConfig, heartbeatConfig } = await req.json();
 
   if (!agentId || !name || !workspace) {

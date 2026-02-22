@@ -5,12 +5,20 @@ import { getPool } from "@/lib/db";
 import { refreshGsdWatchers, getIngestorState } from "@/lib/gateway-ingestor";
 import { syncGatewayMounts } from "@/lib/agent-scaffold";
 import { createProgressStream } from "@/lib/ndjson-stream";
+import { requireAuth } from "@/lib/auth-utils";
 
 const execFileAsync = promisify(execFile);
 
 export const dynamic = "force-dynamic";
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await requireAuth();
+  if (!session) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
   const { id } = await params;
   const { stream, send, close } = createProgressStream();
 

@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db";
 import { refreshProjectTasks } from "@/lib/gsd-watcher";
+import { requireAuth } from "@/lib/auth-utils";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  const session = await requireAuth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json();
   const { project_id } = body;
 

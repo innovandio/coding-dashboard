@@ -1,9 +1,17 @@
 import { runPostSetup } from "@/lib/setup-process";
 import { createProgressStream } from "@/lib/ndjson-stream";
+import { requireAuth } from "@/lib/auth-utils";
 
 export const dynamic = "force-dynamic";
 
 export async function POST() {
+  const session = await requireAuth();
+  if (!session) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
   const { stream, send, close } = createProgressStream();
 
   (async () => {

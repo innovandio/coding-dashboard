@@ -1,6 +1,9 @@
 import { sendGatewayRequest } from "@/lib/gateway-ingestor";
+import { requireAuth } from "@/lib/auth-utils";
 
 export async function POST(req: Request) {
+  const session = await requireAuth();
+  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const { cols, rows } = await req.json();
     if (typeof cols !== "number" || typeof rows !== "number" || cols < 1 || rows < 1) {

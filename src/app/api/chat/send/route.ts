@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getEventBus, nextSyntheticId, type BusEvent } from "@/lib/event-bus";
 import { sendGatewayRequest } from "@/lib/gateway-ingestor";
+import { requireAuth } from "@/lib/auth-utils";
 import { randomUUID } from "crypto";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  const session = await requireAuth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { sessionId, sessionKey, message } = await req.json();
   if (!sessionKey || !message) {
     return NextResponse.json({ error: "sessionKey and message required" }, { status: 400 });

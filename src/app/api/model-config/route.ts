@@ -5,6 +5,7 @@ import {
   pasteAuthToken,
   writeCustomProviderConfig,
 } from "@/lib/model-providers";
+import { requireAuth } from "@/lib/auth-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,8 @@ export async function GET() {
 
 /** Configure a model + auth token (globally or per-agent). */
 export async function POST(req: NextRequest) {
+  const session = await requireAuth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json();
   const { mode, agentId } = body;
 
