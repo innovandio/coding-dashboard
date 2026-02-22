@@ -46,6 +46,8 @@ services:
     build:
       context: https://github.com/openclaw/openclaw.git#main
       dockerfile: Dockerfile.sandbox-browser
+    environment:
+      OPENCLAW_BROWSER_NO_SANDBOX: "1"
     ports:
       - "6080:6080"
       - "9222:9222"

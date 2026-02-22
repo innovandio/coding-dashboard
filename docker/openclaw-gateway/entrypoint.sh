@@ -29,6 +29,14 @@ echo "[entrypoint] Updating Claude Code..."
 curl -fsSL https://claude.ai/install.sh | bash > /dev/null 2>&1 || echo "[entrypoint] Claude Code update failed, using installed version"
 echo "[entrypoint] Claude Code version: $(/root/.local/bin/claude --version 2>/dev/null || echo 'unknown')"
 
+# Update OpenClaw from GitHub (non-blocking on failure).
+echo "[entrypoint] Updating OpenClaw..."
+(cd /app && git pull --ff-only && pnpm install --frozen-lockfile && pnpm build && pnpm ui:build) > /dev/null 2>&1 || echo "[entrypoint] OpenClaw update failed, using installed version"
+
+# Update Get Shit Done (GSD) skills (non-blocking on failure).
+echo "[entrypoint] Updating GSD..."
+npx -y get-shit-done-cc@latest --claude --global > /dev/null 2>&1 || echo "[entrypoint] GSD update failed, using installed version"
+
 # Ensure hasCompletedOnboarding is set AFTER the update — the installer may
 # overwrite .claude.json with its own defaults. Merge it into whatever exists.
 node -e "

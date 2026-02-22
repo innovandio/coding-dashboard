@@ -10,6 +10,9 @@ RUN corepack enable
 RUN curl -fsSL https://claude.ai/install.sh | bash
 ENV PATH="/root/.local/bin:${PATH}"
 
+# Install Get Shit Done (GSD) skills for Claude Code
+RUN npx -y get-shit-done-cc@latest --claude --global
+
 WORKDIR /app
 
 # Clone OpenClaw from GitHub
