@@ -25,9 +25,15 @@ import {
   emptyModelConfig,
   type ModelConfigState,
 } from "@/components/shared/model-config-form";
+import {
+  HeartbeatConfigForm,
+  defaultHeartbeatConfig,
+} from "@/components/shared/heartbeat-config-form";
+import { ProjectEditDialog } from "@/components/shared/project-edit-dialog";
 import { useStepProgress } from "@/hooks/use-step-progress";
 import { Settings, Pencil, Trash2, Plus, Check, X } from "lucide-react";
 import type { Project } from "@/hooks/use-dashboard-state";
+import type { HeartbeatConfig } from "@/lib/heartbeat-config";
 
 interface OpenClawAgent {
   id: string;
@@ -51,11 +57,8 @@ export function ProjectManagerDialog({
 }) {
   const [open, setOpen] = useState(false);
 
-  // Edit state
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editPath, setEditPath] = useState("");
-  const [editSaving, setEditSaving] = useState(false);
+  // Edit dialog state
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
 
   // Delete state
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -67,6 +70,7 @@ export function ProjectManagerDialog({
   const [basedOn, setBasedOn] = useState("__blank__");
   const [modelConfig, setModelConfig] = useState<ModelConfigState>(emptyModelConfig);
   const [useGlobalModel, setUseGlobalModel] = useState(true);
+  const [heartbeatConfig, setHeartbeatConfig] = useState<HeartbeatConfig>(defaultHeartbeatConfig);
   const [addPhase, setAddPhase] = useState<"idle" | "confirm">("idle");
   const [addError, setAddError] = useState<string | null>(null);
 
@@ -90,33 +94,6 @@ export function ProjectManagerDialog({
       })
       .catch(() => {});
   }, [open]);
-
-  function startEdit(project: Project) {
-    setEditingId(project.id);
-    setEditName(project.name);
-    setEditPath(project.workspace_path ?? "");
-    setDeletingId(null);
-    setAdding(false);
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
-  }
-
-  async function saveEdit(id: string) {
-    setEditSaving(true);
-    try {
-      await fetch(`/api/projects/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editName, workspace_path: editPath }),
-      });
-      setEditingId(null);
-      onChanged();
-    } finally {
-      setEditSaving(false);
-    }
-  }
 
   function confirmDelete(id: string) {
     setDeletingId(null);
@@ -156,6 +133,7 @@ export function ProjectManagerDialog({
         workspace: newPath,
         basedOn: basedOn === "__blank__" ? null : basedOn,
         modelConfig: !useGlobalModel && modelConfig.apiKey ? modelConfig : undefined,
+        heartbeatConfig: heartbeatConfig.enabled ? heartbeatConfig : undefined,
       }),
     });
   }
@@ -173,6 +151,7 @@ export function ProjectManagerDialog({
       setBasedOn("__blank__");
       setModelConfig(emptyModelConfig);
       setUseGlobalModel(true);
+      setHeartbeatConfig(defaultHeartbeatConfig());
       setAddPhase("idle");
       setAddError(null);
       onChanged();
@@ -200,39 +179,7 @@ export function ProjectManagerDialog({
             )}
             {projects.map((p) => (
               <div key={p.id}>
-                {editingId === p.id ? (
-                  <div className="space-y-2 rounded-md border p-3">
-                    <Input
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      placeholder="Name"
-                      className="h-7 text-xs"
-                    />
-                    <FolderPicker
-                      value={editPath}
-                      onChange={setEditPath}
-                      placeholder="Workspace path"
-                      className="h-7 text-xs"
-                    />
-                    <div className="flex gap-1 justify-end">
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={cancelEdit}
-                      >
-                        <X className="size-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        disabled={editSaving || !editName}
-                        onClick={() => saveEdit(p.id)}
-                      >
-                        <Check className="size-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ) : deletingId === p.id ? (
+                {deletingId === p.id ? (
                   <div className="flex items-center justify-between rounded-md border border-destructive/50 px-3 py-2">
                     <span className="text-xs text-destructive">
                       Delete {p.name}?
@@ -269,7 +216,11 @@ export function ProjectManagerDialog({
                       <Button
                         variant="ghost"
                         size="icon-xs"
-                        onClick={() => startEdit(p)}
+                        onClick={() => {
+                          setEditingProject(p);
+                          setDeletingId(null);
+                          setAdding(false);
+                        }}
                       >
                         <Pencil className="size-3" />
                       </Button>
@@ -278,7 +229,6 @@ export function ProjectManagerDialog({
                         size="icon-xs"
                         onClick={() => {
                           setDeletingId(p.id);
-                          setEditingId(null);
                           setAdding(false);
                         }}
                       >
@@ -368,6 +318,14 @@ export function ProjectManagerDialog({
                   />
                 )}
               </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Heartbeat</Label>
+                <HeartbeatConfigForm
+                  value={heartbeatConfig}
+                  onChange={setHeartbeatConfig}
+                  disabled={addBusy}
+                />
+              </div>
               {addPhase === "confirm" && (
                 <div className="rounded-md border border-yellow-600/40 bg-yellow-950/30 px-3 py-2 text-xs text-yellow-200">
                   Adding a project will restart the OpenClaw gateway to mount the
@@ -423,7 +381,6 @@ export function ProjectManagerDialog({
               className="w-full"
               onClick={() => {
                 setAdding(true);
-                setEditingId(null);
                 setDeletingId(null);
               }}
             >
@@ -433,6 +390,12 @@ export function ProjectManagerDialog({
           )}
         </DialogContent>
       </Dialog>
+
+      <ProjectEditDialog
+        project={editingProject}
+        onClose={() => setEditingProject(null)}
+        onSaved={onChanged}
+      />
 
       <StepProgressDialog
         open={progressOpen}

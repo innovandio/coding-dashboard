@@ -13,6 +13,7 @@ import {
 import { sendGatewayRequest } from "@/lib/gateway-ingestor";
 import { createProgressStream } from "@/lib/ndjson-stream";
 import { setDefaultModel, pasteAuthToken, writeCustomProviderConfig } from "@/lib/model-providers";
+import { writeHeartbeatConfig, HeartbeatConfig } from "@/lib/heartbeat-config";
 
 const execFileAsync = promisify(execFile);
 
@@ -25,7 +26,7 @@ function expandTilde(p: string): string {
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  const { agentId, name, workspace, basedOn, modelConfig } = await req.json();
+  const { agentId, name, workspace, basedOn, modelConfig, heartbeatConfig } = await req.json();
 
   if (!agentId || !name || !workspace) {
     return new Response(
@@ -206,8 +207,24 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Step 5: Wait for gateway to reconnect
-      send({ step: 5, status: "processing", label: "Waiting for gateway" });
+      // Step 5: Configure heartbeat (if provided)
+      if (heartbeatConfig && (heartbeatConfig as HeartbeatConfig).enabled) {
+        send({ step: 5, status: "processing", label: "Configuring heartbeat" });
+        try {
+          await writeHeartbeatConfig(agentId, heartbeatConfig as HeartbeatConfig);
+          send({ step: 5, status: "success" });
+        } catch (err) {
+          // Non-fatal — project was already created
+          const message = err instanceof Error ? err.message : "Unknown error";
+          console.warn("[projects/create] Heartbeat config error:", message);
+          send({ step: 5, status: "success", label: "Configuring heartbeat (skipped)" });
+        }
+      } else {
+        send({ step: 5, status: "success", label: "Heartbeat (not configured)" });
+      }
+
+      // Step 6: Wait for gateway to reconnect
+      send({ step: 6, status: "processing", label: "Waiting for gateway" });
       try {
         refreshGsdWatchers();
 
@@ -223,14 +240,14 @@ export async function POST(req: NextRequest) {
         }
 
         if (connected) {
-          send({ step: 5, status: "success" });
+          send({ step: 6, status: "success" });
         } else {
           // Timeout is soft — project was created successfully
-          send({ step: 5, status: "success", label: "Gateway still starting (project ready)" });
+          send({ step: 6, status: "success", label: "Gateway still starting (project ready)" });
         }
       } catch (err) {
         // Non-fatal — project exists regardless
-        send({ step: 5, status: "success", label: "Waiting for gateway (skipped)" });
+        send({ step: 6, status: "success", label: "Waiting for gateway (skipped)" });
         console.warn("[projects/create] Gateway wait error:", err);
       }
 

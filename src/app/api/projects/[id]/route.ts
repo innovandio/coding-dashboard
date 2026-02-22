@@ -5,6 +5,7 @@ import { promisify } from "util";
 import { getPool } from "@/lib/db";
 import { refreshGsdWatchers } from "@/lib/gateway-ingestor";
 import { syncGatewayMounts } from "@/lib/agent-scaffold";
+import { writeHeartbeatConfig, HeartbeatConfig } from "@/lib/heartbeat-config";
 
 const execFileAsync = promisify(execFile);
 
@@ -70,6 +71,19 @@ export async function PATCH(
     syncGatewayMounts().catch((err) =>
       console.warn("[projects] Failed to sync gateway mounts:", err)
     );
+  }
+
+  // Persist heartbeat config (non-blocking side effect)
+  if (body.heartbeat !== undefined) {
+    const { rows } = await pool.query<{ agent_id: string }>(
+      `SELECT agent_id FROM projects WHERE id = $1`,
+      [id]
+    );
+    if (rows[0]?.agent_id) {
+      writeHeartbeatConfig(rows[0].agent_id, body.heartbeat as HeartbeatConfig).catch(
+        (err) => console.warn("[projects] Failed to write heartbeat config:", err)
+      );
+    }
   }
 
   return NextResponse.json({ ok: true });
