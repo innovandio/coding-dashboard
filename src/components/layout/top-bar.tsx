@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { Project } from "@/hooks/use-dashboard-state";
 
 export function TopBar({
@@ -15,11 +16,13 @@ export function TopBar({
   selectedProjectId,
   onSelectProject,
   onProjectAdded,
+  loading,
 }: {
   projects: Project[];
   selectedProjectId: string | null;
   onSelectProject: (id: string) => void;
   onProjectAdded: () => void;
+  loading?: boolean;
 }) {
   return (
     <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2">
@@ -29,7 +32,9 @@ export function TopBar({
 
       <div className="flex items-center gap-3">
         <div className="flex items-center">
-          {projects.length > 0 ? (
+          {loading ? (
+            <Skeleton className="h-9 w-48 rounded-r-none" />
+          ) : projects.length > 0 ? (
             <Select
               value={selectedProjectId ?? projects[0].id}
               onValueChange={onSelectProject}

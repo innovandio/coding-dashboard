@@ -49,6 +49,7 @@ export function ChatInput({
         ref={textareaRef}
         className="flex-1 resize-none bg-muted/50 border rounded-md px-3 py-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring min-h-[32px] max-h-[120px]"
         placeholder="Send a message..."
+        aria-label="Chat message"
         rows={1}
         disabled={disabled}
         onKeyDown={handleKeyDown}

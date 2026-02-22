@@ -1,18 +1,30 @@
 "use client";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { Session } from "@/hooks/use-dashboard-state";
 
 export function SessionTabs({
   sessions,
   selectedSessionId,
   onSelectSession,
+  loading,
 }: {
   sessions: Session[];
   selectedSessionId: string | null;
   onSelectSession: (id: string | null) => void;
+  loading?: boolean;
 }) {
-  if (sessions.length === 0) return null;
+  if (!loading && sessions.length === 0) return null;
+
+  if (loading) {
+    return (
+      <div className="border-b border-border bg-card px-4 py-1 flex gap-2">
+        <Skeleton className="h-6 w-16 rounded" />
+        <Skeleton className="h-6 w-24 rounded" />
+      </div>
+    );
+  }
 
   return (
     <div className="border-b border-border bg-card px-4 py-1">

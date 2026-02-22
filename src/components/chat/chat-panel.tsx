@@ -12,6 +12,7 @@ import { formatArgsSummary } from "@/lib/format-args";
 import { parseToolEvent, isToolComplete } from "@/lib/parse-tool-event";
 import type { ConversationTurn, ConversationToolCall, TurnError } from "@/app/api/chat/activity/route";
 import { stripAnsi } from "@/lib/utils";
+import { toast } from "sonner";
 import type { BusEvent } from "@/lib/event-bus";
 
 interface ContentBlock {
@@ -85,17 +86,18 @@ export function ChatPanel({
 
     if (!projectId) return;
 
-    let cancelled = false;
+    const controller = new AbortController();
     setResolving(true);
 
     fetch("/api/chat/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ projectId }),
+      signal: controller.signal,
     })
       .then((res) => res.json())
       .then((data) => {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         if (data.error) {
           setError(data.error);
         } else {
@@ -104,14 +106,15 @@ export function ChatPanel({
         }
       })
       .catch((err) => {
-        if (!cancelled) setError(err.message);
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        if (!controller.signal.aborted) setError(err.message);
       })
       .finally(() => {
-        if (!cancelled) setResolving(false);
+        if (!controller.signal.aborted) setResolving(false);
       });
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [projectId]);
 
@@ -130,7 +133,7 @@ export function ChatPanel({
       setHistoryTurns(data.turns ?? []);
       historyFetchedAt.current = Date.now();
     } catch {
-      // ignore
+      // History fetch failures are expected during connection setup
     }
   }, [sessionKey]);
 
@@ -417,8 +420,8 @@ export function ChatPanel({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionId, sessionKey, message }),
         });
-      } catch (err) {
-        console.error("Failed to send message:", err);
+      } catch {
+        toast.error("Failed to send message");
       }
     },
     [sessionId, sessionKey]
@@ -432,8 +435,8 @@ export function ChatPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionKey }),
       });
-    } catch (err) {
-      console.error("Failed to abort:", err);
+    } catch {
+      toast.error("Failed to abort");
     }
   }, [sessionKey]);
 

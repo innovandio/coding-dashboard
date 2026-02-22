@@ -55,12 +55,14 @@ export function AssistantTurn({
               type="button"
               className="text-[0.65rem] text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => setThinkingOpen((o) => !o)}
+              aria-expanded={thinkingOpen}
+              aria-controls="thinking-content"
             >
               {thinkingOpen ? "Hide" : "Show"} thinking
               {isStreaming && !text ? "..." : ""}
             </button>
             {thinkingOpen && (
-              <div className="mt-1 pl-2 border-l-2 border-muted-foreground/30 text-muted-foreground whitespace-pre-wrap text-[0.65rem] max-h-48 overflow-y-auto">
+              <div id="thinking-content" className="mt-1 pl-2 border-l-2 border-muted-foreground/30 text-muted-foreground whitespace-pre-wrap text-[0.65rem] max-h-48 overflow-y-auto">
                 {thinking}
               </div>
             )}

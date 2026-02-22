@@ -16,19 +16,19 @@ interface GsdWatcherState {
   taskCache: Map<string, GsdTask[]>;
 }
 
-const globalForWatcher = globalThis as unknown as {
-  gsdWatcherState?: GsdWatcherState;
-};
+declare global {
+  var __gsdWatcherState: GsdWatcherState | undefined;
+}
 
 function getState(): GsdWatcherState {
-  if (!globalForWatcher.gsdWatcherState) {
-    globalForWatcher.gsdWatcherState = { entries: new Map(), taskCache: new Map() };
+  if (!globalThis.__gsdWatcherState) {
+    globalThis.__gsdWatcherState = { entries: new Map(), taskCache: new Map() };
   }
   // Handle HMR: old state may lack taskCache
-  if (!globalForWatcher.gsdWatcherState.taskCache) {
-    globalForWatcher.gsdWatcherState.taskCache = new Map();
+  if (!globalThis.__gsdWatcherState.taskCache) {
+    globalThis.__gsdWatcherState.taskCache = new Map();
   }
-  return globalForWatcher.gsdWatcherState;
+  return globalThis.__gsdWatcherState;
 }
 
 async function refreshProject(projectId: string, workspacePath: string) {

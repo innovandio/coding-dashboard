@@ -23,7 +23,9 @@ export async function GET(
 ) {
   const { id } = await params;
   const pool = getPool();
-  const result = await pool.query(`SELECT * FROM projects WHERE id = $1`, [id]);
+  const result = await pool.query<{ id: string; agent_id: string; name: string; workspace_path: string | null; created_at: string; meta: Record<string, unknown> }>(
+    `SELECT * FROM projects WHERE id = $1`, [id]
+  );
   if (result.rows.length === 0) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

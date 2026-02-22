@@ -28,10 +28,14 @@ export interface PtyLifecycleEvent {
 /** Max bytes of output to buffer per run. */
 const MAX_BUFFER_BYTES = 64 * 1024; // 64 KB
 
+/** Remove buffers not accessed in this many ms (guards against lost pty.exited events). */
+const BUFFER_STALE_MS = 5 * 60 * 1000;
+
 interface RunBuffer {
   projectId: string;
   chunks: string[];
   totalBytes: number;
+  lastAccessedAt: number;
 }
 
 interface RunMeta {
@@ -39,24 +43,24 @@ interface RunMeta {
   command?: string;
 }
 
-const globalForPty = globalThis as unknown as {
-  ptyEmitter?: EventEmitter;
-  ptyScreenBuffers?: Map<string, RunBuffer>;
-  ptyRunMeta?: Map<string, RunMeta>;
-};
+declare global {
+  var __ptyEmitter: EventEmitter | undefined;
+  var __ptyScreenBuffers: Map<string, RunBuffer> | undefined;
+  var __ptyRunMeta: Map<string, RunMeta> | undefined;
+}
 
 function getScreenBuffers(): Map<string, RunBuffer> {
-  if (!globalForPty.ptyScreenBuffers) {
-    globalForPty.ptyScreenBuffers = new Map();
+  if (!globalThis.__ptyScreenBuffers) {
+    globalThis.__ptyScreenBuffers = new Map();
   }
-  return globalForPty.ptyScreenBuffers;
+  return globalThis.__ptyScreenBuffers;
 }
 
 function getMetaMap(): Map<string, RunMeta> {
-  if (!globalForPty.ptyRunMeta) {
-    globalForPty.ptyRunMeta = new Map();
+  if (!globalThis.__ptyRunMeta) {
+    globalThis.__ptyRunMeta = new Map();
   }
-  return globalForPty.ptyRunMeta;
+  return globalThis.__ptyRunMeta;
 }
 
 /** Return metadata (label, command) for a specific run. */
@@ -83,7 +87,7 @@ export function getRunBuffers(projectId: string): Array<{ runId: string; data: s
 }
 
 export function getPtyEmitter(): EventEmitter {
-  if (!globalForPty.ptyEmitter) {
+  if (!globalThis.__ptyEmitter) {
     const emitter = new EventEmitter();
     emitter.setMaxListeners(100);
 
@@ -94,9 +98,10 @@ export function getPtyEmitter(): EventEmitter {
       if (!evt.runId || !evt.projectId) return;
       let buf = buffers.get(evt.runId);
       if (!buf) {
-        buf = { projectId: evt.projectId, chunks: [], totalBytes: 0 };
+        buf = { projectId: evt.projectId, chunks: [], totalBytes: 0, lastAccessedAt: Date.now() };
         buffers.set(evt.runId, buf);
       }
+      buf.lastAccessedAt = Date.now();
       buf.chunks.push(evt.data);
       buf.totalBytes += evt.data.length;
       // Trim from front when over limit
@@ -109,7 +114,7 @@ export function getPtyEmitter(): EventEmitter {
     emitter.on("pty.started", (evt: PtyLifecycleEvent) => {
       if (!evt.runId || !evt.projectId) return;
       if (!buffers.has(evt.runId)) {
-        buffers.set(evt.runId, { projectId: evt.projectId, chunks: [], totalBytes: 0 });
+        buffers.set(evt.runId, { projectId: evt.projectId, chunks: [], totalBytes: 0, lastAccessedAt: Date.now() });
       }
       const metaMap = getMetaMap();
       metaMap.set(evt.runId, { label: evt.label, command: evt.command });
@@ -123,7 +128,20 @@ export function getPtyEmitter(): EventEmitter {
       }
     });
 
-    globalForPty.ptyEmitter = emitter;
+    // Periodic sweep: remove buffers not accessed in BUFFER_STALE_MS.
+    // Guards against lost pty.exited events that would leave buffers forever.
+    setInterval(() => {
+      const now = Date.now();
+      const metaMap = getMetaMap();
+      for (const [runId, buf] of buffers) {
+        if (now - buf.lastAccessedAt > BUFFER_STALE_MS) {
+          buffers.delete(runId);
+          metaMap.delete(runId);
+        }
+      }
+    }, 60_000);
+
+    globalThis.__ptyEmitter = emitter;
   }
-  return globalForPty.ptyEmitter;
+  return globalThis.__ptyEmitter;
 }

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { BusEvent } from "@/lib/event-bus";
 import type { ConnectionState } from "@/lib/gateway-protocol";
 import { useEventStream } from "@/components/shared/use-event-stream";
+import { MAX_EVENTS } from "@/lib/constants";
+import { toast } from "sonner";
 
 export interface Project {
   id: string;
@@ -62,10 +64,29 @@ export function useDashboardState() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthState>(defaultHealth);
   const [gsdTasks, setGsdTasks] = useState<GsdTask[]>(defaultTasks);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [loadingSessions, setLoadingSessions] = useState(false);
   const [events, setEvents] = useState<BusEvent[]>([]);
 
   // Track GSD update signal from SSE
   const [gsdUpdateTrigger, setGsdUpdateTrigger] = useState(0);
+
+  // Batch incoming events to avoid per-event state updates / array copies.
+  // Events are accumulated in a ref and flushed on the next animation frame.
+  const pendingEventsRef = useRef<BusEvent[]>([]);
+  const rafRef = useRef<number | null>(null);
+
+  const flushEvents = useCallback(() => {
+    rafRef.current = null;
+    const batch = pendingEventsRef.current;
+    if (batch.length === 0) return;
+    pendingEventsRef.current = [];
+
+    setEvents((prev) => {
+      const next = prev.concat(batch);
+      return next.length > MAX_EVENTS ? next.slice(-MAX_EVENTS) : next;
+    });
+  }, []);
 
   // SSE event stream
   const handleEvent = useCallback((ev: BusEvent) => {
@@ -75,49 +96,73 @@ export function useDashboardState() {
       return;
     }
 
-    setEvents((prev) => {
-      const next = [...prev, ev];
-      return next.length > 500 ? next.slice(-500) : next;
-    });
-  }, []);
+    pendingEventsRef.current.push(ev);
+    if (rafRef.current === null) {
+      rafRef.current = requestAnimationFrame(flushEvents);
+    }
+  }, [flushEvents]);
 
   useEventStream(selectedProjectId, selectedSessionId, handleEvent);
 
-  // Fetch projects
+  // Fetch projects (AbortController cancels in-flight requests on re-call)
+  const projectsAbortRef = useRef<AbortController | null>(null);
   const fetchProjects = useCallback(async () => {
+    projectsAbortRef.current?.abort();
+    const controller = new AbortController();
+    projectsAbortRef.current = controller;
+    setLoadingProjects(true);
     try {
-      const res = await fetch("/api/projects");
+      const res = await fetch("/api/projects", { signal: controller.signal });
+      if (!res.ok) throw new Error("Failed to load projects");
       const data = await res.json();
       setProjects(data);
-    } catch {
-      // ignore
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      toast.error("Failed to load projects");
+    } finally {
+      if (!controller.signal.aborted) setLoadingProjects(false);
     }
   }, []);
 
   // Fetch sessions for selected project
+  const sessionsAbortRef = useRef<AbortController | null>(null);
   const fetchSessions = useCallback(async () => {
+    sessionsAbortRef.current?.abort();
     if (!selectedProjectId) {
       setSessions([]);
+      setLoadingSessions(false);
       return;
     }
+    const controller = new AbortController();
+    sessionsAbortRef.current = controller;
+    setLoadingSessions(true);
     try {
-      const res = await fetch(`/api/projects/${selectedProjectId}/sessions`);
+      const res = await fetch(`/api/projects/${selectedProjectId}/sessions`, { signal: controller.signal });
+      if (!res.ok) throw new Error("Failed to load sessions");
       const data = await res.json();
       setSessions(data);
-    } catch {
-      // ignore
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      toast.error("Failed to load sessions");
+    } finally {
+      if (!controller.signal.aborted) setLoadingSessions(false);
     }
   }, [selectedProjectId]);
 
   // Health polling (2s)
   useEffect(() => {
+    let healthFailCount = 0;
     const poll = async () => {
       try {
         const res = await fetch("/api/health");
         const data = await res.json();
         setHealth(data);
+        healthFailCount = 0;
       } catch {
-        // ignore
+        healthFailCount++;
+        if (healthFailCount === 3) {
+          toast.error("Dashboard server unreachable");
+        }
       }
     };
     poll();
@@ -142,10 +187,12 @@ export function useDashboardState() {
     try {
       const params = selectedProjectId ? `?project_id=${selectedProjectId}` : "";
       const res = await fetch(`/api/gsd/tasks${params}`);
+      if (!res.ok) throw new Error("Failed to load tasks");
       const data = await res.json();
       setGsdTasks(data);
       return data as GsdTask[];
     } catch {
+      toast.error("Failed to refresh GSD tasks");
       return [];
     }
   }, [selectedProjectId]);
@@ -185,6 +232,12 @@ export function useDashboardState() {
     fetchSessions();
     setSelectedSessionId(null);
     setEvents([]);
+    // Discard any pending batched events from the previous project
+    pendingEventsRef.current = [];
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
   }, [selectedProjectId, fetchSessions]);
 
   return {
@@ -197,6 +250,8 @@ export function useDashboardState() {
     health,
     gsdTasks,
     events,
+    loadingProjects,
+    loadingSessions,
     fetchProjects,
     fetchSessions,
   };

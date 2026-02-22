@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   const pool = getPool();
 
   // Look up the project
-  const project = await pool.query(
+  const project = await pool.query<{ agent_id: string; name: string; workspace_path: string | null }>(
     `SELECT agent_id, name, workspace_path FROM projects WHERE id = $1`,
     [projectId]
   );
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   const agentId = row?.agent_id ?? projectId;
 
   // Check if project already has a chat session
-  const existing = await pool.query(
+  const existing = await pool.query<{ id: string; session_key: string }>(
     `SELECT id, session_key FROM sessions WHERE project_id = $1 AND meta->>'type' = 'chat' LIMIT 1`,
     [projectId]
   );

@@ -111,11 +111,38 @@ interface IngestorState {
   needsClaudeLoginCheckedAt: number;
 }
 
-// Cache: sessionKey -> { projectId, sessionId, agentId }
-const sessionKeyCache = new Map<
-  string,
-  { projectId: string; sessionId: string; agentId: string }
->();
+// Cache: sessionKey -> { projectId, sessionId, agentId, cachedAt }
+// Entries expire after 5 minutes and the cache is capped at 500 entries.
+const SESSION_KEY_CACHE_TTL_MS = 5 * 60 * 1000;
+const SESSION_KEY_CACHE_MAX = 500;
+
+interface SessionKeyCacheEntry {
+  projectId: string;
+  sessionId: string;
+  agentId: string;
+  cachedAt: number;
+}
+
+const sessionKeyCache = new Map<string, SessionKeyCacheEntry>();
+
+function sessionKeyCacheGet(key: string): SessionKeyCacheEntry | undefined {
+  const entry = sessionKeyCache.get(key);
+  if (!entry) return undefined;
+  if (Date.now() - entry.cachedAt > SESSION_KEY_CACHE_TTL_MS) {
+    sessionKeyCache.delete(key);
+    return undefined;
+  }
+  return entry;
+}
+
+function sessionKeyCacheSet(key: string, value: Omit<SessionKeyCacheEntry, "cachedAt">) {
+  if (sessionKeyCache.size >= SESSION_KEY_CACHE_MAX) {
+    // Evict oldest entry
+    const oldest = sessionKeyCache.keys().next().value;
+    if (oldest !== undefined) sessionKeyCache.delete(oldest);
+  }
+  sessionKeyCache.set(key, { ...value, cachedAt: Date.now() });
+}
 
 // --- needsSetup detection ---
 
@@ -152,7 +179,7 @@ function checkNeedsSetup(state: IngestorState): void {
 
 /** Called from setup-process.ts after successful setup to bust the cache. */
 export function invalidateNeedsSetupCache(): void {
-  const s = globalForIngestor.ingestorState;
+  const s = globalThis.__ingestorState;
   if (s) {
     s.needsSetupCheckedAt = 0;
     s.needsSetup = false;
@@ -165,7 +192,7 @@ export function invalidateNeedsSetupCache(): void {
  * can be called again with fresh env vars and a new device identity.
  */
 export function restartIngestor(): void {
-  const s = globalForIngestor.ingestorState;
+  const s = globalThis.__ingestorState;
   if (s?.ws) {
     // Remove message listener immediately so the old connection cannot process
     // any events that arrive during the async TCP close handshake.  Without
@@ -183,8 +210,8 @@ export function restartIngestor(): void {
     }
     s.pendingRequests.clear();
   }
-  globalForIngestor.ingestorStarted = false;
-  globalForIngestor.ingestorState = undefined;
+  globalThis.__ingestorStarted = false;
+  globalThis.__ingestorState = undefined;
   console.log("[ingestor] Force-restart: cleared state, will re-init on next startIngestor()");
   startIngestor();
 }
@@ -228,7 +255,7 @@ function checkNeedsClaudeLogin(state: IngestorState): void {
 
 /** Called from claude-login-process.ts after successful login to bust the cache. */
 export function invalidateNeedsClaudeLoginCache(): void {
-  const s = globalForIngestor.ingestorState;
+  const s = globalThis.__ingestorState;
   if (s) {
     s.needsClaudeLoginCheckedAt = 0;
     s.needsClaudeLogin = false;
@@ -246,10 +273,10 @@ function shouldEmit(eventType: string, payload: Record<string, unknown>): boolea
   return true;
 }
 
-const globalForIngestor = globalThis as unknown as {
-  ingestorStarted?: boolean;
-  ingestorState?: IngestorState;
-};
+declare global {
+  var __ingestorStarted: boolean | undefined;
+  var __ingestorState: IngestorState | undefined;
+}
 
 export function getIngestorState(): {
   connectionState: ConnectionState;
@@ -261,7 +288,7 @@ export function getIngestorState(): {
   needsSetup: boolean;
   needsClaudeLogin: boolean;
 } {
-  const s = globalForIngestor.ingestorState;
+  const s = globalThis.__ingestorState;
   if (!s) {
     // No ingestor yet — can't check container volumes, return defaults
     return {
@@ -331,7 +358,7 @@ export function sendGatewayRequest(
   params?: Record<string, unknown>,
   timeoutMs = 10000
 ): Promise<Record<string, unknown>> {
-  const state = globalForIngestor.ingestorState;
+  const state = globalThis.__ingestorState;
   if (!state || !state.ws || state.ws.readyState !== WebSocket.OPEN) {
     return Promise.reject(new Error("Gateway not connected"));
   }
@@ -353,7 +380,7 @@ export function sendGatewayRequest(
 export async function refreshGsdWatchers() {
   try {
     const pool = getPool();
-    const result = await pool.query(
+    const result = await pool.query<{ id: string; name: string; workspace_path: string }>(
       `SELECT id, name, workspace_path FROM projects WHERE workspace_path IS NOT NULL`
     );
     await initGsdWatchers(result.rows);
@@ -363,8 +390,8 @@ export async function refreshGsdWatchers() {
 }
 
 export function startIngestor() {
-  if (globalForIngestor.ingestorStarted) return;
-  globalForIngestor.ingestorStarted = true;
+  if (globalThis.__ingestorStarted) return;
+  globalThis.__ingestorStarted = true;
 
   const state: IngestorState = {
     connectionState: "disconnected",
@@ -380,7 +407,7 @@ export function startIngestor() {
     needsClaudeLogin: false,
     needsClaudeLoginCheckedAt: 0,
   };
-  globalForIngestor.ingestorState = state;
+  globalThis.__ingestorState = state;
 
   const gatewayUrl = process.env.GATEWAY_WS_URL;
 
@@ -547,7 +574,7 @@ export function startIngestor() {
           if (backendId) {
             // backendId is set to agentId by the pty-broadcast plugin
             try {
-              const result = await pool.query(
+              const result = await pool.query<{ id: string }>(
                 `SELECT id FROM projects WHERE agent_id = $1 LIMIT 1`,
                 [backendId]
               );
@@ -560,7 +587,7 @@ export function startIngestor() {
             const agentId = sid.includes(":") ? sid.split(":")[0] : sid;
             if (agentId) {
               try {
-                const result = await pool.query(
+                const result = await pool.query<{ id: string }>(
                   `SELECT id FROM projects WHERE agent_id = $1 LIMIT 1`,
                   [agentId]
                 );
@@ -605,7 +632,7 @@ export function startIngestor() {
       state.ws = null;
 
       // Reject all pending requests
-      for (const [id, pending] of state.pendingRequests) {
+      for (const [, pending] of state.pendingRequests) {
         clearTimeout(pending.timer);
         pending.reject(new Error("Gateway connection closed"));
       }
@@ -622,11 +649,11 @@ export function startIngestor() {
     async function resolveSessionKey(
       sessionKey: string
     ): Promise<{ projectId: string; sessionId: string; agentId: string } | null> {
-      const cached = sessionKeyCache.get(sessionKey);
+      const cached = sessionKeyCacheGet(sessionKey);
       if (cached) return cached;
 
       try {
-        const result = await pool.query(
+        const result = await pool.query<{ id: string; project_id: string; agent_id: string }>(
           `SELECT s.id, s.project_id, p.agent_id
            FROM sessions s
            JOIN projects p ON p.id = s.project_id
@@ -639,7 +666,7 @@ export function startIngestor() {
             sessionId: result.rows[0].id,
             agentId: result.rows[0].agent_id,
           };
-          sessionKeyCache.set(sessionKey, entry);
+          sessionKeyCacheSet(sessionKey, entry);
           return entry;
         }
       } catch (err) {
@@ -674,7 +701,7 @@ export function startIngestor() {
 
     async function ensureProject(agentId: string): Promise<string> {
       try {
-        const existing = await pool.query(
+        const existing = await pool.query<{ id: string }>(
           `SELECT id FROM projects WHERE agent_id = $1`,
           [agentId]
         );
@@ -697,7 +724,7 @@ export function startIngestor() {
       projectId: string
     ): Promise<void> {
       try {
-        const existing = await pool.query(
+        const existing = await pool.query<{ id: string }>(
           `SELECT id FROM sessions WHERE id = $1`,
           [sessionId]
         );

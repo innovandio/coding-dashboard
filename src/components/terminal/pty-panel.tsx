@@ -17,7 +17,9 @@ import {
 } from "@/components/ui/select";
 import { ConnectionDot } from "@/components/shared/connection-dot";
 import { usePtyStream } from "@/hooks/use-pty-stream";
+import { toast } from "sonner";
 import { Settings } from "lucide-react";
+import { TERMINAL_SCROLLBACK, TERMINAL_FONT_SIZE } from "@/lib/constants";
 import type { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 
@@ -29,7 +31,9 @@ function sendPtyResize(cols: number, rows: number) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cols, rows }),
-  }).catch(() => {});
+  }).catch(() => {
+    // Resize failures are expected when no PTY is active — don't toast
+  });
 }
 
 async function fetchPingBackSettings(projectId: string): Promise<{ enabled: boolean; message: string }> {
@@ -52,7 +56,9 @@ function savePingBackSettings(projectId: string, settings: { enabled: boolean; m
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ meta: { pingback_enabled: settings.enabled, pingback_message: settings.message } }),
-  }).catch(() => {});
+  }).catch(() => {
+    toast.error("Failed to save ping-back settings");
+  });
 }
 
 async function sendPingBack(projectId: string, message: string) {
@@ -156,7 +162,7 @@ export function PtyPanel({
 
       term = new Terminal({
         cursorBlink: true,
-        fontSize: 12,
+        fontSize: TERMINAL_FONT_SIZE,
         fontFamily: '"Geist Mono", ui-monospace, "SF Mono", Menlo, monospace',
         theme: {
           background: "#0a0a0a",
@@ -164,7 +170,7 @@ export function PtyPanel({
           cursor: "#e4e4e7",
           selectionBackground: "rgba(255, 255, 255, 0.2)",
         },
-        scrollback: 10000,
+        scrollback: TERMINAL_SCROLLBACK,
         convertEol: false,
       });
 

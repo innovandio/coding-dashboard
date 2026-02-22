@@ -21,4 +21,15 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS sessions_project_id_idx ON sessions(project_id);
 CREATE INDEX IF NOT EXISTS sessions_session_key_idx ON sessions(session_key);
+CREATE INDEX IF NOT EXISTS projects_created_at_idx ON projects(created_at DESC);
+CREATE INDEX IF NOT EXISTS sessions_status_idx ON sessions(status);
+CREATE INDEX IF NOT EXISTS sessions_created_at_idx ON sessions(created_at DESC);
+
+-- Constrain session status to known values
+DO $$ BEGIN
+  ALTER TABLE sessions ADD CONSTRAINT sessions_status_check
+    CHECK (status IN ('active', 'ended'));
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 

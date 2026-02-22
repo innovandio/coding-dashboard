@@ -59,7 +59,6 @@ function extractText(data: Record<string, unknown>): string {
 /** Check if an event looks like an agent stream event (has stream + runId in payload) */
 function isAgentStreamEvent(ev: BusEvent): boolean {
   if (ev.event_type === "agent") return true;
-  // Fallback: detect by payload shape (stream + runId present)
   const p = ev.payload;
   return typeof p.stream === "string" && typeof p.runId === "string";
 }
@@ -68,27 +67,21 @@ function isAgentStreamEvent(ev: BusEvent): boolean {
 
 export function useAgentActivity(events: BusEvent[]): AgentActivityState {
   return useMemo(() => {
-    const agentEvents = events.filter(isAgentStreamEvent);
-
-    if (agentEvents.length === 0) {
-      return { lifecycleState: "idle", runs: [] };
-    }
-
     const runMap = new Map<string, ActivityRun>();
     const toolMap = new Map<string, ToolCallItem>();
     let toolSeq = 0;
 
-    for (const ev of agentEvents) {
+    for (const ev of events) {
+      if (!isAgentStreamEvent(ev)) continue;
+
       const payload = ev.payload as Record<string, unknown>;
       const stream = payload.stream as string | undefined;
       const runId = payload.runId as string | undefined;
-      // data can be a nested object or the payload itself may contain the fields
       const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
       if (!runId) continue;
 
       const ts = parseTimestamp(ev.created_at);
 
-      // Get or create run
       let run = runMap.get(runId);
       if (!run) {
         run = {
@@ -120,10 +113,7 @@ export function useAgentActivity(events: BusEvent[]): AgentActivityState {
         case "tool": {
           const t = parseToolEvent(data);
           const text = extractText(data);
-
-          // Use toolUseId if available, otherwise generate a synthetic one
           const effectiveId = t.toolUseId || `tool-${++toolSeq}`;
-
           const mapKey = `${runId}:${effectiveId}`;
           let existing = toolMap.get(mapKey);
           if (!existing) {
@@ -143,7 +133,6 @@ export function useAgentActivity(events: BusEvent[]): AgentActivityState {
             toolMap.set(mapKey, existing);
             run.items.push(existing);
           }
-          // Update with new info
           if (t.toolName && existing.name === "tool") {
             existing.name = t.toolName;
           }
@@ -166,11 +155,7 @@ export function useAgentActivity(events: BusEvent[]): AgentActivityState {
             if (lastItem && lastItem.kind === "assistant") {
               lastItem.text = text;
             } else {
-              run.items.push({
-                kind: "assistant",
-                text,
-                startedAt: ts,
-              });
+              run.items.push({ kind: "assistant", text, startedAt: ts });
             }
           }
           break;
@@ -183,17 +168,12 @@ export function useAgentActivity(events: BusEvent[]): AgentActivityState {
             if (lastItem && lastItem.kind === "thinking") {
               lastItem.text = text;
             } else {
-              run.items.push({
-                kind: "thinking",
-                text,
-                startedAt: ts,
-              });
+              run.items.push({ kind: "thinking", text, startedAt: ts });
             }
           }
           break;
         }
 
-        // exec/process/result/system — fold into most recent tool call context
         case "exec":
         case "process":
         case "result":
@@ -212,7 +192,10 @@ export function useAgentActivity(events: BusEvent[]): AgentActivityState {
       }
     }
 
-    // Determine overall lifecycle state
+    if (runMap.size === 0) {
+      return { lifecycleState: "idle", runs: [] };
+    }
+
     const runs = Array.from(runMap.values());
     runs.sort((a, b) => a.startedAt - b.startedAt);
 

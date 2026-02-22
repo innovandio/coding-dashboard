@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { GSD_OTHER_PHASE } from "@/lib/constants";
 import {
   ChevronRight,
   ChevronDown,
@@ -77,7 +78,7 @@ function groupByPhase(tasks: GsdTask[]): PhaseGroup[] {
   // Add ungrouped tasks as a misc phase if any
   if (ungrouped.length > 0) {
     phases.push({
-      phaseNumber: 999,
+      phaseNumber: GSD_OTHER_PHASE,
       title: "Other Tasks",
       status: "todo",
       plans: ungrouped,

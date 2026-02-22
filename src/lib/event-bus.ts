@@ -11,7 +11,9 @@ export type BusEvent = {
   created_at: string;
 };
 
-const globalForBus = globalThis as unknown as { eventBus?: EventEmitter };
+declare global {
+  var __eventBus: EventEmitter | undefined;
+}
 
 // Synthetic ID counter for bus-only events (negative to avoid collision with DB bigserial)
 let syntheticIdCounter = 0;
@@ -21,10 +23,10 @@ export function nextSyntheticId(): number {
 }
 
 export function getEventBus(): EventEmitter {
-  if (!globalForBus.eventBus) {
+  if (!globalThis.__eventBus) {
     const bus = new EventEmitter();
     bus.setMaxListeners(100);
-    globalForBus.eventBus = bus;
+    globalThis.__eventBus = bus;
   }
-  return globalForBus.eventBus;
+  return globalThis.__eventBus;
 }

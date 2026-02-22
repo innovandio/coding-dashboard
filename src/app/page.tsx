@@ -6,6 +6,7 @@ import { SessionTabs } from "@/components/layout/session-tabs";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { SetupDialog } from "@/components/setup/setup-dialog";
 import { ClaudeLoginDialog } from "@/components/setup/claude-login-dialog";
+import { DashboardErrorBoundary } from "@/components/errors/dashboard-error-boundary";
 import { useDashboardState } from "@/hooks/use-dashboard-state";
 import { useAgentActivity } from "@/components/activity/use-agent-activity";
 import type { ConnectionState } from "@/lib/gateway-protocol";
@@ -21,6 +22,8 @@ export default function Home() {
     health,
     gsdTasks,
     events,
+    loadingProjects,
+    loadingSessions,
     fetchProjects,
   } = useDashboardState();
 
@@ -88,21 +91,25 @@ export default function Home() {
         selectedProjectId={selectedProjectId}
         onSelectProject={setSelectedProjectId}
         onProjectAdded={fetchProjects}
+        loading={loadingProjects}
       />
       <SessionTabs
         sessions={sessions}
         selectedSessionId={selectedSessionId}
         onSelectSession={setSelectedSessionId}
+        loading={loadingSessions}
       />
-      <DashboardShell
-        gsdTasks={gsdTasks}
-        events={events}
-        projectId={selectedProjectId}
-        agentActive={agentActive}
-        connectionState={health.connectionState as ConnectionState}
-        terminalThinking={terminalThinking}
-        onTerminalThinkingChange={setTerminalThinking}
-      />
+      <DashboardErrorBoundary>
+        <DashboardShell
+          gsdTasks={gsdTasks}
+          events={events}
+          projectId={selectedProjectId}
+          agentActive={agentActive}
+          connectionState={health.connectionState as ConnectionState}
+          terminalThinking={terminalThinking}
+          onTerminalThinkingChange={setTerminalThinking}
+        />
+      </DashboardErrorBoundary>
     </div>
   );
 }
