@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { EventEmitter } from "node:events";
 import type {
   OpenClawPluginApi,
@@ -7,11 +8,12 @@ import type {
 /**
  * pty-broadcast plugin
  *
- * Intercepts the process supervisor's spawn() to capture PTY lifecycle and
- * data events, then broadcasts them to WebSocket clients via the gateway.
+ * Intercepts @lydell/node-pty (a CJS module shared with the gateway) to capture
+ * PTY lifecycle and data events, then broadcasts them to WebSocket clients.
  *
- * Also provides gateway methods for sending input to PTY processes and
- * controlling their lifecycle (kill).
+ * The before_tool_call plugin hook is used to capture agent context (agentId,
+ * sessionKey) just before each tool call. That metadata is then consumed by the
+ * patched pty.spawn() to associate the resulting PTY process with the correct agent.
  *
  * Gateway methods:
  *   pty.subscribe   — activate PTY event broadcasting
@@ -35,6 +37,7 @@ interface ActiveRun {
     end: () => void;
   };
   cancel: (reason?: string) => void;
+  resize: (cols: number, rows: number) => void;
 }
 
 const ptyBus = new EventEmitter();
@@ -43,57 +46,96 @@ ptyBus.setMaxListeners(200);
 /** Active PTY runs, keyed by runId. */
 const activeRuns = new Map<string, ActiveRun>();
 
-let supervisorWrapped = false;
+/**
+ * Latest agent context captured by the before_tool_call hook.
+ * Consumed (and reset to null) when the next PTY is spawned.
+ * Single-slot is sufficient for sequential agent tool calls.
+ */
+let pendingMeta: { agentId: string; sessionKey: string } | null = null;
 
-async function wrapSupervisor() {
-  if (supervisorWrapped) return;
-  supervisorWrapped = true;
+let ptyWrapped = false;
+let runCounter = 0;
 
-  const supervisorModule = await import("/app/src/process/supervisor/index.ts");
-  const supervisor = supervisorModule.getProcessSupervisor();
-  const originalSpawn = supervisor.spawn.bind(supervisor);
+/**
+ * Patch @lydell/node-pty.spawn (a CJS module shared with the gateway).
+ * Because it is CommonJS, require() and the gateway's import() reference the
+ * same module.exports object — patching spawn here affects all callers.
+ */
+async function wrapNodePty() {
+  if (ptyWrapped) return;
+  ptyWrapped = true;
 
-  supervisor.spawn = async (input: any) => {
-    if (input.mode !== "pty") {
-      return originalSpawn(input);
-    }
+  const require = createRequire(import.meta.url);
+  const ptyModule = require("@lydell/node-pty");
 
+  if (!ptyModule || typeof ptyModule.spawn !== "function") {
+    console.error("[pty-broadcast] @lydell/node-pty.spawn not found — cannot intercept PTY spawns");
+    return;
+  }
+
+  const originalSpawn = ptyModule.spawn.bind(ptyModule);
+
+  ptyModule.spawn = function (file: string, args: string[] | string, opts: any) {
+    // Consume the agent context captured by the before_tool_call hook.
+    const captured = pendingMeta;
+    pendingMeta = null;
+
+    const runId = `pty-${++runCounter}-${Date.now()}`;
     const meta: PtyMeta = {
-      runId: input.runId || "",
-      sessionId: input.sessionId,
-      backendId: input.backendId,
-      label: input.backendId,
+      runId,
+      sessionId: captured?.sessionKey ?? "",
+      backendId: captured?.agentId ?? "exec-host",
+      label: captured?.agentId ?? String(file),
     };
 
-    // Wrap onStdout BEFORE calling originalSpawn so the supervisor wires
-    // our wrapper as the stdout listener, not the original callback.
-    const origOnStdout = input.onStdout;
-    input.onStdout = (chunk: string) => {
-      origOnStdout?.(chunk);
-      ptyBus.emit("data", { ...meta, data: chunk });
-    };
-
-    const run = await originalSpawn(input);
-
-    meta.runId = run.runId;
+    const ptyHandle = originalSpawn(file, args, opts);
 
     const activeRun: ActiveRun = {
       meta,
-      pid: run.pid,
-      stdin: run.stdin,
-      cancel: run.cancel,
+      pid: ptyHandle.pid,
+      stdin: {
+        write: (data: string, cb?: (err?: Error | null) => void) => {
+          try {
+            ptyHandle.write(data);
+            cb?.(null);
+          } catch (err) {
+            cb?.(err as Error);
+          }
+        },
+        end: () => {
+          try {
+            ptyHandle.write("\x04"); // Ctrl+D / EOF
+          } catch { /* ignore */ }
+        },
+      },
+      cancel: () => {
+        try { ptyHandle.kill(); } catch { /* ignore */ }
+      },
+      resize: (cols: number, rows: number) => {
+        try { ptyHandle.resize(cols, rows); } catch { /* ignore */ }
+      },
     };
-    activeRuns.set(run.runId, activeRun);
 
-    ptyBus.emit("started", { ...meta, pid: run.pid });
+    activeRuns.set(runId, activeRun);
+    ptyBus.emit("started", { ...meta, pid: ptyHandle.pid });
 
-    run.wait().then(() => {
-      activeRuns.delete(run.runId);
-      ptyBus.emit("exited", { ...meta, pid: run.pid });
+    ptyHandle.onData((data: string) => {
+      ptyBus.emit("data", { ...meta, data: data.toString() });
     });
 
-    return run;
+    ptyHandle.onExit(() => {
+      activeRuns.delete(runId);
+      ptyBus.emit("exited", { ...meta, pid: ptyHandle.pid });
+    });
+
+    console.log(
+      `[pty-broadcast] PTY spawned: runId=${runId} backendId=${meta.backendId} pid=${ptyHandle.pid} file=${file}`,
+    );
+
+    return ptyHandle;
   };
+
+  console.log("[pty-broadcast] @lydell/node-pty.spawn intercepted successfully");
 }
 
 export default function register(api: OpenClawPluginApi) {
@@ -108,12 +150,23 @@ export default function register(api: OpenClawPluginApi) {
     ptyBus.on("exited", (evt) => broadcast!("pty.exited", evt, { dropIfSlow: true }));
   }
 
-  // Activate broadcasting and wrap the supervisor.
+  // Capture agent context before each tool call so the pty.spawn wrapper can
+  // associate the resulting PTY process with the correct agent/session.
+  api.on("before_tool_call", (_event, ctx) => {
+    if (ctx.agentId) {
+      pendingMeta = {
+        agentId: ctx.agentId,
+        sessionKey: ctx.sessionKey ?? ctx.agentId,
+      };
+    }
+  });
+
+  // Activate broadcasting and intercept @lydell/node-pty.
   api.registerGatewayMethod(
     "pty.subscribe",
     async ({ respond, context }: GatewayRequestHandlerOptions) => {
       activateBroadcast(context.broadcast);
-      await wrapSupervisor();
+      await wrapNodePty();
       respond(true, { subscribed: true });
     },
   );
@@ -188,6 +241,32 @@ export default function register(api: OpenClawPluginApi) {
         hasStdin: Boolean(r.stdin),
       }));
       respond(true, { runs });
+    },
+  );
+
+  // Resize all active PTY processes to match the client terminal dimensions.
+  // params: { cols: number, rows: number }
+  api.registerGatewayMethod(
+    "pty.resize",
+    ({ params, respond }: GatewayRequestHandlerOptions) => {
+      const cols = params.cols as number | undefined;
+      const rows = params.rows as number | undefined;
+
+      if (
+        typeof cols !== "number" || typeof rows !== "number" ||
+        cols < 1 || rows < 1
+      ) {
+        respond(false, undefined, { code: "INVALID_REQUEST", message: "cols and rows must be positive numbers" });
+        return;
+      }
+
+      let resized = 0;
+      for (const run of activeRuns.values()) {
+        run.resize(cols, rows);
+        resized++;
+      }
+
+      respond(true, { resized, cols, rows });
     },
   );
 }

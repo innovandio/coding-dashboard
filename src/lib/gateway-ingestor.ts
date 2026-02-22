@@ -167,6 +167,11 @@ export function invalidateNeedsSetupCache(): void {
 export function restartIngestor(): void {
   const s = globalForIngestor.ingestorState;
   if (s?.ws) {
+    // Remove message listener immediately so the old connection cannot process
+    // any events that arrive during the async TCP close handshake.  Without
+    // this, the overlap between old and new connections causes every PTY event
+    // to be emitted twice (old handler + new handler both run).
+    s.ws.removeAllListeners("message");
     try { s.ws.close(); } catch { /* ignore */ }
     s.ws = null;
   }
@@ -540,7 +545,7 @@ export function startIngestor() {
           const backendId = payload.backendId as string | undefined;
           let projectId: string | undefined;
           if (backendId) {
-            // backendId in OpenClaw maps to agent_id in our DB
+            // backendId is set to agentId by the pty-broadcast plugin
             try {
               const result = await pool.query(
                 `SELECT id FROM projects WHERE agent_id = $1 LIMIT 1`,
@@ -548,6 +553,20 @@ export function startIngestor() {
               );
               projectId = result.rows[0]?.id;
             } catch { /* best effort */ }
+          }
+          // Fallback: parse agentId from sessionId (format: "agentId:uuid" or plain agentId)
+          if (!projectId && payload.sessionId) {
+            const sid = payload.sessionId as string;
+            const agentId = sid.includes(":") ? sid.split(":")[0] : sid;
+            if (agentId) {
+              try {
+                const result = await pool.query(
+                  `SELECT id FROM projects WHERE agent_id = $1 LIMIT 1`,
+                  [agentId]
+                );
+                projectId = result.rows[0]?.id;
+              } catch { /* best effort */ }
+            }
           }
           getPtyEmitter().emit(eventName, { ...payload, projectId });
           return;

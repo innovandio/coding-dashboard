@@ -16,6 +16,15 @@ import "@xterm/xterm/css/xterm.css";
 
 const DEFAULT_PING_MESSAGE = "Claude Code finished its work. Please check what is the next step";
 
+/** Tell the gateway to resize all active PTY processes to match the browser terminal. */
+function sendPtyResize(cols: number, rows: number) {
+  fetch("/api/pty/resize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cols, rows }),
+  }).catch(() => {});
+}
+
 async function fetchPingBackSettings(projectId: string): Promise<{ enabled: boolean; message: string }> {
   try {
     const res = await fetch(`/api/projects/${projectId}`);
@@ -95,6 +104,15 @@ export function PtyPanel({
     onThinkingChange?.(hasActivity);
   }, [hasActivity, onThinkingChange]);
 
+  // Resize PTY when new processes appear — they're spawned at gateway
+  // default dimensions which may differ from the browser terminal.
+  useEffect(() => {
+    const t = terminalRef.current;
+    if (activeRuns.size > 0 && t) {
+      sendPtyResize(t.cols, t.rows);
+    }
+  }, [activeRuns]);
+
   const handlePingBackToggle = useCallback((checked: boolean) => {
     setPingBackEnabled(checked);
     if (projectId) {
@@ -140,6 +158,9 @@ export function PtyPanel({
       if (containerRef.current) {
         term.open(containerRef.current);
         fitAddon.fit();
+        // Resize PTY to match browser terminal dimensions so Claude Code's
+        // cursor-relative animations land on the correct rows/cols.
+        sendPtyResize(term.cols, term.rows);
       }
 
       // Forward user keystrokes to all active PTY processes.
@@ -166,12 +187,23 @@ export function PtyPanel({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+
     const observer = new ResizeObserver(() => {
       fitAddonRef.current?.fit();
+      // Debounce PTY resize so rapid container resizes don't flood the gateway.
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const t = terminalRef.current;
+        if (t) sendPtyResize(t.cols, t.rows);
+      }, 150);
     });
     observer.observe(containerRef.current);
 
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (resizeTimer) clearTimeout(resizeTimer);
+    };
   }, [projectId]);
 
   return (
