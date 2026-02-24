@@ -46,3 +46,7 @@ docker-compose.override.yml
 *.tsbuildinfo
 next-env.d.ts
 /.playwright-mcp/
+
+.tldrignore
+.tldr/
+.claude/
