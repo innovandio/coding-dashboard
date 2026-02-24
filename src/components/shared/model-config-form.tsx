@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Select,
   SelectContent,
@@ -10,6 +10,9 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { OpenAILoginDialog } from "@/components/setup/openai-login-dialog";
+import { CheckCircle2 } from "lucide-react";
 
 export interface CatalogModel {
   key: string;
@@ -37,6 +40,8 @@ export interface ModelConfigState {
   customModelId: string;
   // Shared
   apiKey: string;
+  // OpenAI OAuth (set when user signs in via browser)
+  openaiAuthenticated?: boolean;
 }
 
 interface Props {
@@ -46,8 +51,18 @@ interface Props {
   compact?: boolean;
 }
 
+function isOpenAIProvider(id: string): boolean {
+  const lower = id.toLowerCase();
+  return lower.includes("openai") || lower.includes("codex");
+}
+
 export function isModelConfigValid(state: ModelConfigState): boolean {
-  if (!state.apiKey) return false;
+  const needsApiKey = !(
+    state.mode === "catalog" &&
+    isOpenAIProvider(state.provider) &&
+    state.openaiAuthenticated
+  );
+  if (needsApiKey && !state.apiKey) return false;
   if (state.mode === "catalog") {
     return !!(state.provider && state.modelKey);
   }
@@ -72,6 +87,7 @@ const CUSTOM_SENTINEL = "__custom__";
 export function ModelConfigForm({ value, onChange, disabled, compact }: Props) {
   const [catalog, setCatalog] = useState<ProviderGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [openaiDialogOpen, setOpenaiDialogOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/model-config")
@@ -82,6 +98,25 @@ export function ModelConfigForm({ value, onChange, disabled, compact }: Props) {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  // Check OpenAI auth status when an OpenAI provider is selected
+  useEffect(() => {
+    if (value.mode === "catalog" && isOpenAIProvider(value.provider)) {
+      fetch("/api/openai-login/status")
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.authenticated && !value.openaiAuthenticated) {
+            onChange({ ...value, openaiAuthenticated: true });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [value.provider]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleOpenAILoginComplete = useCallback(() => {
+    setOpenaiDialogOpen(false);
+    onChange({ ...value, openaiAuthenticated: true });
+  }, [value, onChange]);
 
   const provider = catalog.find((p) => p.id === value.provider);
   const models = provider?.models ?? [];
@@ -207,17 +242,41 @@ export function ModelConfigForm({ value, onChange, disabled, compact }: Props) {
         </div>
       )}
 
-      <div className="space-y-1">
-        <Label className={labelCls}>API Key</Label>
-        <Input
-          type="password"
-          value={value.apiKey}
-          onChange={(e) => onChange({ ...value, apiKey: e.target.value })}
-          placeholder="API key"
-          className={inputCls}
-          disabled={disabled}
-        />
-      </div>
+      {!isCustom && isOpenAIProvider(value.provider) ? (
+        <div className="space-y-1">
+          <Label className={labelCls}>Authentication</Label>
+          {value.openaiAuthenticated ? (
+            <div className="flex items-center gap-2 text-xs text-green-600">
+              <CheckCircle2 className="h-4 w-4" />
+              Signed in with OpenAI
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full text-xs"
+              onClick={() => setOpenaiDialogOpen(true)}
+              disabled={disabled}
+            >
+              Sign in with OpenAI
+            </Button>
+          )}
+          <OpenAILoginDialog open={openaiDialogOpen} onLoginComplete={handleOpenAILoginComplete} />
+        </div>
+      ) : (
+        <div className="space-y-1">
+          <Label className={labelCls}>API Key</Label>
+          <Input
+            type="password"
+            value={value.apiKey}
+            onChange={(e) => onChange({ ...value, apiKey: e.target.value })}
+            placeholder="API key"
+            className={inputCls}
+            disabled={disabled}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -84,10 +84,15 @@ export async function pasteAuthToken(
     args.splice(5, 0, "--agent", agentId);
   }
   await new Promise<void>((resolve, reject) => {
-    const child = execFile("docker", args, { timeout: 15000 }, (err) => {
-      if (err) reject(err);
-      else resolve();
-    });
+    const child = execFile(
+      "docker",
+      args,
+      { timeout: 15000, maxBuffer: 5 * 1024 * 1024 },
+      (err) => {
+        if (err) reject(err);
+        else resolve();
+      },
+    );
     // paste-token uses a TUI prompt that expects \r (carriage return) to submit
     child.stdin?.end(apiKey + "\r");
   });

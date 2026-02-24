@@ -24,6 +24,6 @@ export const config = {
      * - /_next (Next.js internals)
      * - /favicon.ico, /icon.*, /apple-icon.* (static assets)
      */
-    "/((?!api/auth|sign-in|callback|_next|favicon\\.ico|icon|apple-icon).*)",
+    "/((?!api/auth|sign-in|callback|auth/callback|_next|favicon\\.ico|icon|apple-icon).*)",
   ],
 };

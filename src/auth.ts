@@ -49,13 +49,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     async jwt({ token, user }) {
       if (user) {
+        token.sub = user.id;
         token.name = user.name;
         token.email = user.email;
+      }
+      // Ensure sub is set from DB for OAuth providers
+      if (!token.sub && token.email) {
+        const pool = getPool();
+        const { rows } = await pool.query("SELECT id FROM users WHERE email = $1", [token.email]);
+        if (rows[0]) token.sub = rows[0].id;
       }
       return token;
     },
     async session({ session, token }) {
       if (token) {
+        session.user.id = token.sub as string;
         session.user.name = token.name as string;
         session.user.email = token.email as string;
       }
