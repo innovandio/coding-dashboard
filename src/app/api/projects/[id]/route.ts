@@ -6,6 +6,9 @@ import { getPool } from "@/lib/db";
 import { refreshGsdWatchers } from "@/lib/gateway-ingestor";
 import { syncGatewayMounts } from "@/lib/agent-scaffold";
 import { writeHeartbeatConfig, HeartbeatConfig } from "@/lib/heartbeat-config";
+import { setDefaultModel, pasteAuthToken, writeCustomProviderConfig } from "@/lib/model-providers";
+import { getValidOpenAIToken } from "@/lib/openai-token-manager";
+import { requireAuth } from "@/lib/auth-utils";
 
 const execFileAsync = promisify(execFile);
 
@@ -71,16 +74,56 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     );
   }
 
-  // Persist heartbeat config (non-blocking side effect)
-  if (body.heartbeat !== undefined) {
+  // Look up agent_id once for heartbeat + model config
+  const needsAgentId = body.heartbeat !== undefined || body.meta?.modelConfig;
+  let agentId: string | undefined;
+  if (needsAgentId) {
     const { rows } = await pool.query<{ agent_id: string }>(
       `SELECT agent_id FROM projects WHERE id = $1`,
       [id],
     );
-    if (rows[0]?.agent_id) {
-      writeHeartbeatConfig(rows[0].agent_id, body.heartbeat as HeartbeatConfig).catch((err) =>
-        console.warn("[projects] Failed to write heartbeat config:", err),
-      );
+    agentId = rows[0]?.agent_id;
+  }
+
+  // Persist heartbeat config (non-blocking side effect)
+  if (body.heartbeat !== undefined && agentId) {
+    writeHeartbeatConfig(agentId, body.heartbeat as HeartbeatConfig).catch((err) =>
+      console.warn("[projects] Failed to write heartbeat config:", err),
+    );
+  }
+
+  // Apply model config to gateway agent
+  if (body.meta?.modelConfig && agentId) {
+    const mc = body.meta.modelConfig;
+    try {
+      if (mc.mode === "custom") {
+        await writeCustomProviderConfig({
+          provider: mc.customProvider,
+          baseUrl: mc.customBaseUrl,
+          api: mc.customApi || "openai-completions",
+          modelId: mc.customModelId,
+          apiKey: mc.apiKey,
+          agentId,
+        });
+      } else {
+        // For OpenAI providers with OAuth, resolve the stored token
+        let token = mc.apiKey;
+        const providerLower = (mc.provider ?? "").toLowerCase();
+        const isOpenAI = providerLower.includes("openai") || providerLower.includes("codex");
+        if (isOpenAI && mc.openaiAuthenticated && !token) {
+          const session = await requireAuth();
+          const userId = session?.user?.id;
+          if (userId) {
+            token = await getValidOpenAIToken(userId);
+          }
+        }
+        if (token) {
+          await pasteAuthToken(mc.provider, token, agentId);
+        }
+        await setDefaultModel(mc.modelKey, agentId);
+      }
+    } catch (err) {
+      console.warn("[projects] Failed to apply model config:", err);
     }
   }
 

@@ -24,18 +24,25 @@ if [ ! -L "$CLAUDE_JSON_LINK" ]; then
   echo "[entrypoint] Symlinked .claude.json -> .claude/.claude.json"
 fi
 
-# Update Claude Code via native installer (non-blocking on failure).
-echo "[entrypoint] Updating Claude Code..."
-curl -fsSL https://claude.ai/install.sh | bash > /dev/null 2>&1 || echo "[entrypoint] Claude Code update failed, using installed version"
-echo "[entrypoint] Claude Code version: $(/root/.local/bin/claude --version 2>/dev/null || echo 'unknown')"
+# Update Claude Code via native installer (async, non-blocking on failure).
+echo "[entrypoint] Updating Claude Code (background)..."
+(
+  curl -fsSL https://claude.ai/install.sh | bash > /dev/null 2>&1 \
+    && echo "[entrypoint] Claude Code updated: $(/root/.local/bin/claude --version 2>/dev/null || echo 'unknown')" \
+    || echo "[entrypoint] Claude Code update failed, using installed version"
+) &
 
-# Update OpenClaw from GitHub (non-blocking on failure).
+# Update OpenClaw from GitHub (synchronous, must complete before gateway starts).
 echo "[entrypoint] Updating OpenClaw..."
 (cd /app && git pull --ff-only && pnpm install --frozen-lockfile && pnpm build && pnpm ui:build) > /dev/null 2>&1 || echo "[entrypoint] OpenClaw update failed, using installed version"
 
-# Update Get Shit Done (GSD) skills (non-blocking on failure).
-echo "[entrypoint] Updating GSD..."
-npx -y get-shit-done-cc@latest --claude --global > /dev/null 2>&1 || echo "[entrypoint] GSD update failed, using installed version"
+# Update Get Shit Done (GSD) skills (async, non-blocking on failure).
+echo "[entrypoint] Updating GSD (background)..."
+(
+  npx -y get-shit-done-cc@latest --claude --global > /dev/null 2>&1 \
+    && echo "[entrypoint] GSD updated" \
+    || echo "[entrypoint] GSD update failed, using installed version"
+) &
 
 # Ensure hasCompletedOnboarding is set AFTER the update — the installer may
 # overwrite .claude.json with its own defaults. Merge it into whatever exists.
