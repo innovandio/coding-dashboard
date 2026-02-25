@@ -11,6 +11,7 @@ import { createProgressStream } from "@/lib/ndjson-stream";
 import { setDefaultModel, pasteAuthToken, writeCustomProviderConfig } from "@/lib/model-providers";
 import { writeHeartbeatConfig, HeartbeatConfig } from "@/lib/heartbeat-config";
 import { requireAuth } from "@/lib/auth-utils";
+import { getValidOpenAIToken } from "@/lib/openai-token-manager";
 
 const execFileAsync = promisify(execFile);
 
@@ -47,30 +48,14 @@ export async function POST(req: NextRequest) {
       // Step 0: Register agent
       send({ step: 0, status: "processing", label: "Registering agent" });
       try {
-        const containerProjectDir = `/projects/${agentId}`;
         const agentDirPath = agentDir(agentId);
-        const runArgs = [
-          "compose",
-          "run",
-          "--rm",
-          "-T",
-          "-v",
-          `${workspace}:${containerProjectDir}`,
-          "openclaw-gateway",
-        ];
+        const execArgs = ["compose", "exec", "-T", "openclaw-gateway"];
 
-        await execFileAsync("docker", [
-          "compose",
-          "exec",
-          "openclaw-gateway",
-          "mkdir",
-          "-p",
-          agentDirPath,
-        ]);
+        await execFileAsync("docker", [...execArgs, "mkdir", "-p", agentDirPath]);
 
         try {
           await execFileAsync("docker", [
-            ...runArgs,
+            ...execArgs,
             "openclaw",
             "agents",
             "add",
@@ -85,7 +70,7 @@ export async function POST(req: NextRequest) {
           const msg = addErr instanceof Error ? addErr.message : "";
           if (msg.includes("already exists")) {
             await execFileAsync("docker", [
-              ...runArgs,
+              ...execArgs,
               "openclaw",
               "agents",
               "delete",
@@ -93,7 +78,7 @@ export async function POST(req: NextRequest) {
               "--force",
             ]);
             await execFileAsync("docker", [
-              ...runArgs,
+              ...execArgs,
               "openclaw",
               "agents",
               "add",
@@ -187,10 +172,18 @@ export async function POST(req: NextRequest) {
       }
 
       // Step 4: Configure model (if provided)
+      const isOpenAIProvider =
+        modelConfig?.provider &&
+        (modelConfig.provider.toLowerCase().includes("openai") ||
+          modelConfig.provider.toLowerCase().includes("codex"));
       const hasModelConfig =
         modelConfig?.mode === "custom"
           ? !!(modelConfig?.customProvider && modelConfig?.customModelId && modelConfig?.apiKey)
-          : !!(modelConfig?.provider && modelConfig?.modelKey && modelConfig?.apiKey);
+          : !!(
+              modelConfig?.provider &&
+              modelConfig?.modelKey &&
+              (modelConfig?.apiKey || (isOpenAIProvider && modelConfig?.openaiAuthenticated))
+            );
 
       if (hasModelConfig) {
         send({ step: 4, status: "processing", label: "Configuring model" });
@@ -205,7 +198,17 @@ export async function POST(req: NextRequest) {
               agentId,
             });
           } else {
-            await pasteAuthToken(modelConfig.provider, modelConfig.apiKey, agentId);
+            // For OpenAI providers with OAuth, resolve the stored token
+            let token = modelConfig.apiKey;
+            if (isOpenAIProvider && modelConfig.openaiAuthenticated && !token) {
+              const userId = session?.user?.id;
+              if (userId) {
+                token = await getValidOpenAIToken(userId);
+              }
+            }
+            if (token) {
+              await pasteAuthToken(modelConfig.provider, token, agentId);
+            }
             await setDefaultModel(modelConfig.modelKey, agentId);
           }
           send({ step: 4, status: "success" });
@@ -266,7 +269,7 @@ export async function POST(req: NextRequest) {
       try {
         refreshGsdWatchers();
 
-        const deadline = Date.now() + 60_000;
+        const deadline = Date.now() + 5 * 60_000;
         let connected = false;
         while (Date.now() < deadline) {
           const state = getIngestorState();

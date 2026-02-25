@@ -99,10 +99,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
         send({ step: 3, status: "success", label: "Syncing gateway mounts (skipped)" });
       }
 
-      // Step 4: Wait for gateway to reconnect
+      // Step 4: Wait for gateway to reconnect (up to 5 min — entrypoint update takes a while)
       send({ step: 4, status: "processing", label: "Waiting for gateway" });
       try {
-        const deadline = Date.now() + 60_000;
+        const deadline = Date.now() + 5 * 60_000;
         let connected = false;
         while (Date.now() < deadline) {
           const state = getIngestorState();
