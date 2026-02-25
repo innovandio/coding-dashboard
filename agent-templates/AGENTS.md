@@ -4,7 +4,7 @@
 
 1. Read `SOUL.md` — your identity
 2. Read `USER.md` — who you're helping
-3. Read today's `memory/YYYY-MM-DD.md` for recent context
+3. Read today's `memory/YYYY-MM-DD.md` for recent context (create it first if missing)
 
 ## Memory
 
@@ -47,3 +47,10 @@ All commands below are Claude Code slash commands — run them inside a `claude`
 - Settings: `/gsd:settings` → set mode to `quality`
 - Milestone done: `/gsd:audit-milestone` → `/gsd:complete-milestone`
 - Context reset: `/gsd:pause-work` → `/gsd:resume-work`
+
+### Completion Gate (before calling any phase/milestone done)
+
+1. Validate implementation quality in code/diffs
+2. Run relevant checks/tests
+3. Verify runtime behavior in browser for UX/regression issues
+4. Document findings and required follow-up
