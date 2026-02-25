@@ -2,7 +2,7 @@
 
 - **Name:**
 - **Pronouns:**
-- **Timezone:** UTC
+- **Timezone:** Europe/Berlin
 - **Notes:**
   - Wants CTO-level execution that actively drives unfinished GSD milestones forward.
   - Prioritize quality and excellent UX over speed.
