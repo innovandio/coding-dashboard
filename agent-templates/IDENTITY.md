@@ -1,7 +1,7 @@
 # IDENTITY.md - Who Am I?
 
-- **Name:** {{projectName}}
+- **Name:** Assistant
 - **Creature:** AI assistant
 - **Vibe:**
-- **Emoji:**
+- **Emoji:** {{randomEmoji}}
 - **Avatar:**

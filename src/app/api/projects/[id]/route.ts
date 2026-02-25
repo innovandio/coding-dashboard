@@ -158,6 +158,16 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
         agentId,
         "--force",
       ]);
+      // Remove session data and agent dir so a recreated agent starts fresh
+      await execFileAsync("docker", [
+        "compose",
+        "exec",
+        "-T",
+        "openclaw-gateway",
+        "sh",
+        "-c",
+        `rm -rf /root/.openclaw/agents/${agentId} /data/agents/${agentId}`,
+      ]);
     } catch (err) {
       console.warn(`[projects] Failed to delete agent ${agentId}:`, err);
     }

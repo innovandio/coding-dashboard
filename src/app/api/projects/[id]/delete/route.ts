@@ -80,6 +80,16 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
           agentId,
           "--force",
         ]);
+        // Remove session data and agent dir so a recreated agent starts fresh
+        await execFileAsync("docker", [
+          "compose",
+          "exec",
+          "-T",
+          "openclaw-gateway",
+          "sh",
+          "-c",
+          `rm -rf /root/.openclaw/agents/${agentId} /data/agents/${agentId}`,
+        ]);
         send({ step: 2, status: "success" });
       } catch (err) {
         // Non-fatal — DB records are already gone
