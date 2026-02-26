@@ -16,6 +16,7 @@ import { FolderPicker } from "@/components/shared/folder-picker";
 import {
   ModelConfigForm,
   emptyModelConfig,
+  isModelConfigValid,
   type ModelConfigState,
 } from "@/components/shared/model-config-form";
 import {
@@ -73,7 +74,7 @@ export function ProjectEditDialog({ project, onClose, onSaved }: Props) {
         workspace_path: workspacePath,
         heartbeat,
       };
-      if (modelMode === "custom" && modelConfig.apiKey) {
+      if (modelMode === "custom" && isModelConfigValid(modelConfig)) {
         body.meta = { modelConfig };
       }
       await fetch(`/api/projects/${project.id}`, {

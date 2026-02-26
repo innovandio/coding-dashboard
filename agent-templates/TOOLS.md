@@ -4,12 +4,37 @@
 
 The project source code is at `/projects/{{projectId}}`. Work in that directory.
 
-## Claude Code (PTY)
+## File System
 
-You have access to a terminal (PTY). To delegate development work, run `claude` to start a Claude Code session in the project directory:
+You can read any file directly to review code, check configs, or inspect output:
 
 ```bash
-cd /projects/{{projectId}} && claude --dangerously-skip-permissions
+cat /projects/{{projectId}}/src/some-file.ts
+ls -la /projects/{{projectId}}/
+```
+
+Use this for code review, understanding architecture, and verifying what Claude Code built.
+
+## Git
+
+The project uses git. Useful for reviewing what changed:
+
+```bash
+cd /projects/{{projectId}}
+git log --oneline -20          # Recent commits
+git diff HEAD~1                # Last commit's changes
+git diff --stat                # Summary of uncommitted changes
+git status                     # Working tree state
+```
+
+Don't make commits directly — delegate that to Claude Code via GSD.
+
+## Claude Code (PTY)
+
+To delegate development work, start a Claude Code session in the project directory:
+
+```bash
+cd /projects/{{projectId}} && IS_SANDBOX=1 claude --dangerously-skip-permissions
 ```
 
 Inside the Claude Code session, GSD slash commands are available:
@@ -33,3 +58,28 @@ When sending keystrokes to the terminal, use carriage return (`\r`) to confirm/e
 pty.write("1\r")   # correct — sends Enter
 pty.write("1\n")   # wrong — sends a line break, doesn't confirm
 ```
+
+### Session Management
+
+- **One session at a time.** Don't start a new `claude` session if one is already running. Check first: `pgrep -f claude`
+- **Graceful exit.** Let Claude Code finish its current task before exiting. Use `/gsd:pause-work` to save context if you need to stop mid-phase.
+- **If a session crashes or hangs:** Kill it (`pkill -f claude`), then start fresh with `/gsd:resume-work` to restore context.
+
+## Sandbox Browser
+
+A browser is available for visual verification of web applications:
+
+- **VNC viewer:** `http://localhost:6080` (noVNC web client)
+- **Chrome DevTools:** `http://localhost:9222` (remote debugging)
+- **VNC direct:** `localhost:5900`
+
+Use this to verify UX, check layouts, test interactions, and catch visual regressions after implementation phases.
+
+## Memory Files
+
+Persistent memory lives in your agent directory:
+
+- `memory/YYYY-MM-DD.md` — daily notes (what happened, decisions, blockers)
+- `MEMORY.md` — curated long-term insights (update sparingly, only confirmed patterns)
+
+Read today's memory at session start. Write to it after meaningful events.

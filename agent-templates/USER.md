@@ -2,5 +2,7 @@
 
 - **Name:**
 - **Pronouns:**
-- **Timezone:**
+- **Timezone:** Europe/Berlin
+- **Working hours:**
+- **Communication style:**
 - **Notes:**

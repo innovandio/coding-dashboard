@@ -49,14 +49,44 @@ export async function fetchModelCatalog(): Promise<ProviderGroup[]> {
 }
 
 /**
- * Set the default model for an agent (or globally) via `openclaw models set`.
+ * Set the default model for an agent (or globally).
+ *
+ * When agentId is provided, writes a per-agent model override directly into
+ * openclaw.json (the CLI's `models set --agent` doesn't support agent-level
+ * overrides — it always writes to the global defaults).
+ * When no agentId is given, uses the CLI to set the global default.
  */
 export async function setDefaultModel(modelKey: string, agentId?: string): Promise<void> {
-  const args = ["compose", "exec", "-T", "openclaw-gateway", "openclaw", "models", "set", modelKey];
   if (agentId) {
-    args.splice(5, 0, "--agent", agentId);
+    // Write per-agent model override directly in openclaw.json
+    await execFileAsync(
+      "docker",
+      [
+        "compose",
+        "exec",
+        "-T",
+        "openclaw-gateway",
+        "node",
+        "-e",
+        `const fs=require("fs");` +
+          `const f="/root/.openclaw/openclaw.json";` +
+          `const c=JSON.parse(fs.readFileSync(f,"utf8"));` +
+          `const a=c.agents.list.find(x=>x.id===${JSON.stringify(agentId)});` +
+          `if(!a)throw new Error("Agent not found: "+${JSON.stringify(agentId)});` +
+          `a.model=a.model||{};` +
+          `a.model.primary=${JSON.stringify(modelKey)};` +
+          `fs.writeFileSync(f,JSON.stringify(c,null,2));` +
+          `console.log("Set agent "+${JSON.stringify(agentId)}+" model to "+${JSON.stringify(modelKey)});`,
+      ],
+      { timeout: 15000 },
+    );
+  } else {
+    await execFileAsync(
+      "docker",
+      ["compose", "exec", "-T", "openclaw-gateway", "openclaw", "models", "set", modelKey],
+      { timeout: 15000 },
+    );
   }
-  await execFileAsync("docker", args, { timeout: 15000 });
 }
 
 /**
@@ -81,7 +111,7 @@ export async function pasteAuthToken(
     provider,
   ];
   if (agentId) {
-    args.splice(5, 0, "--agent", agentId);
+    args.splice(6, 0, "--agent", agentId);
   }
   await new Promise<void>((resolve, reject) => {
     const child = execFile(
@@ -199,20 +229,7 @@ export async function writeCustomProviderConfig(params: {
     `echo '${authB64}' | base64 -d > '${dir}/auth-profiles.json'`,
   ]);
 
-  // Set the custom model as default via openclaw config set
+  // Set the custom model as default
   const modelKey = `${provider}/${modelId}`;
-  const setArgs = [
-    "compose",
-    "exec",
-    "-T",
-    "openclaw-gateway",
-    "openclaw",
-    "models",
-    "set",
-    modelKey,
-  ];
-  if (agentId) {
-    setArgs.splice(5, 0, "--agent", agentId);
-  }
-  await execFileAsync("docker", setArgs, { timeout: 15000 });
+  await setDefaultModel(modelKey, agentId);
 }

@@ -23,6 +23,7 @@ import { StepProgressDialog } from "@/components/shared/step-progress-dialog";
 import {
   ModelConfigForm,
   emptyModelConfig,
+  isModelConfigValid,
   type ModelConfigState,
 } from "@/components/shared/model-config-form";
 import {
@@ -132,7 +133,7 @@ export function ProjectManagerDialog({
         name: newName,
         workspace: newPath,
         basedOn: basedOn === "__blank__" ? null : basedOn,
-        modelConfig: !useGlobalModel && modelConfig.apiKey ? modelConfig : undefined,
+        modelConfig: !useGlobalModel && isModelConfigValid(modelConfig) ? modelConfig : undefined,
         heartbeatConfig: heartbeatConfig.enabled ? heartbeatConfig : undefined,
       }),
     });
