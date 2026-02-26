@@ -11,8 +11,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { OpenAILoginDialog } from "@/components/setup/openai-login-dialog";
-import { CheckCircle2 } from "lucide-react";
+import { useOpenAILoginStream } from "@/hooks/use-openai-login-stream";
+import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 
 export interface CatalogModel {
   key: string;
@@ -87,7 +87,9 @@ const CUSTOM_SENTINEL = "__custom__";
 export function ModelConfigForm({ value, onChange, disabled, compact }: Props) {
   const [catalog, setCatalog] = useState<ProviderGroup[]>([]);
   const [loading, setLoading] = useState(true);
-  const [openaiDialogOpen, setOpenaiDialogOpen] = useState(false);
+  const [loginActive, setLoginActive] = useState(false);
+
+  const { loginState, exitCode, oauthUrl } = useOpenAILoginStream(loginActive);
 
   useEffect(() => {
     fetch("/api/model-config")
@@ -113,10 +115,29 @@ export function ModelConfigForm({ value, onChange, disabled, compact }: Props) {
     }
   }, [value.provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleOpenAILoginComplete = useCallback(() => {
-    setOpenaiDialogOpen(false);
-    onChange({ ...value, openaiAuthenticated: true });
-  }, [value, onChange]);
+  // Auto-open OAuth URL when it arrives
+  useEffect(() => {
+    if (oauthUrl) {
+      window.open(oauthUrl, "_blank");
+    }
+  }, [oauthUrl]);
+
+  // Auto-complete on success after 2s delay
+  useEffect(() => {
+    if (loginState === "exited" && exitCode === 0) {
+      const timer = setTimeout(() => {
+        setLoginActive(false);
+        onChange({ ...value, openaiAuthenticated: true });
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [loginState, exitCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRetry = useCallback(() => {
+    setLoginActive(false);
+    // Reset by toggling off then on in next tick
+    setTimeout(() => setLoginActive(true), 0);
+  }, []);
 
   const provider = catalog.find((p) => p.id === value.provider);
   const models = provider?.models ?? [];
@@ -250,19 +271,61 @@ export function ModelConfigForm({ value, onChange, disabled, compact }: Props) {
               <CheckCircle2 className="h-4 w-4" />
               Signed in with OpenAI
             </div>
+          ) : loginState === "exited" && exitCode === 0 ? (
+            <div className="flex items-center gap-2 text-xs text-green-600">
+              <CheckCircle2 className="h-4 w-4" />
+              Signed in with OpenAI
+            </div>
+          ) : loginState === "exited" ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs text-destructive">
+                <XCircle className="h-4 w-4" />
+                Login failed
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full bg-white text-black border text-xs"
+                onClick={handleRetry}
+                disabled={disabled}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : loginState === "exchanging" ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Completing login...
+            </div>
+          ) : loginActive && oauthUrl ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Complete sign-in in browser...
+            </div>
+          ) : loginActive ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full bg-white text-black border text-xs"
+              disabled
+            >
+              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+              Preparing...
+            </Button>
           ) : (
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="w-full text-xs"
-              onClick={() => setOpenaiDialogOpen(true)}
+              className="w-full bg-white text-black border text-xs"
+              onClick={() => setLoginActive(true)}
               disabled={disabled}
             >
               Sign in with OpenAI
             </Button>
           )}
-          <OpenAILoginDialog open={openaiDialogOpen} onLoginComplete={handleOpenAILoginComplete} />
         </div>
       ) : (
         <div className="space-y-1">
