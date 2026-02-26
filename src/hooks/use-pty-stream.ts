@@ -223,13 +223,15 @@ export function usePtyStream(projectId: string | null) {
           runBuffersRef.current.set(payload.runId, existing + exitMsg);
           if (selectedRunIdRef.current === payload.runId) {
             writeToTerminal(exitMsg);
+            // Only clear thinking state when the *selected* run exits —
+            // other processes exiting shouldn't affect the spinner indicator.
+            setHasActivity(false);
+            if (activityTimer) clearTimeout(activityTimer);
           }
         }
       } catch {
         /* ignore */
       }
-      setHasActivity(false);
-      if (activityTimer) clearTimeout(activityTimer);
     });
 
     return () => {

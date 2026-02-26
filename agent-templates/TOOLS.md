@@ -24,3 +24,12 @@ Inside the Claude Code session, GSD slash commands are available:
 - `/gsd:help` — list all available commands
 
 These commands are Claude Code slash commands — they only work inside a `claude` session, not in a regular shell.
+
+### PTY input: use `\r` not `\n`
+
+When sending keystrokes to the terminal, use carriage return (`\r`) to confirm/enter, **not** newline (`\n`). A `\n` is a line break, not a key press — it won't submit input.
+
+```
+pty.write("1\r")   # correct — sends Enter
+pty.write("1\n")   # wrong — sends a line break, doesn't confirm
+```
