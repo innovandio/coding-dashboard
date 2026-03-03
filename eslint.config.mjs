@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Eval fixtures/references intentionally contain broken code.
+    "tests/eval/references/**",
+    "tests/eval/fixtures/**",
   ]),
   {
     rules: {
