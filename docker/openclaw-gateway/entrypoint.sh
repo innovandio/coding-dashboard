@@ -49,4 +49,22 @@ node -e "
   }
 "
 
+# Ensure gateway config allows non-loopback Control UI connections.
+# Newer OpenClaw versions require explicit allowedOrigins when --bind lan.
+OPENCLAW_JSON="/root/.openclaw/openclaw.json"
+mkdir -p /root/.openclaw
+node -e "
+  const fs = require('fs');
+  const f = '$OPENCLAW_JSON';
+  let d = {};
+  try { d = JSON.parse(fs.readFileSync(f, 'utf8')); } catch {}
+  if (!d.gateway) d.gateway = {};
+  if (!d.gateway.controlUi) d.gateway.controlUi = {};
+  if (!d.gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback) {
+    d.gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback = true;
+    fs.writeFileSync(f, JSON.stringify(d, null, 2));
+    console.log('[entrypoint] Enabled controlUi host-header origin fallback');
+  }
+"
+
 exec "$@"
