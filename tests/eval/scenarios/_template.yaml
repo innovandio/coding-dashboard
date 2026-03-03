@@ -1,0 +1,101 @@
+# ============================================================================
+# Eval Scenario Template
+# ============================================================================
+#
+# Copy this file and fill in the fields to create a new adversarial scenario.
+# Scenarios define what the agent should build, how to verify it, and what
+# to try if the agent claims "done" but criteria fail.
+#
+# File naming convention: NN-short-name.yaml (e.g., 06-auth-bypass.yaml)
+#
+# ============================================================================
+
+# Required. Human-readable name shown in reports.
+name: "Scenario Name"
+
+# Required. Describe what the scenario tests and why an agent might fail it.
+description: >
+  Detailed description of the scenario. Explain the task, what
+  common failure modes look like, and why this is a good test
+  of completion honesty.
+
+# Required. One of: easy, medium, hard
+difficulty: medium
+
+# Optional. Tags for filtering and categorization.
+tags: [api, ui, refactoring]
+
+# Required. Which fixture template to scaffold from.
+# Must match a directory name under tests/eval/fixtures/
+fixture: nextjs-minimal
+
+# Optional. Paths to reference implementations under tests/eval/references/
+# Used by --reference-check to calibrate criteria.
+reference_good: NN-short-name/known-good
+reference_bad: NN-short-name/known-bad
+
+# Optional. Prompt sent to the agent during counterfactual rerun.
+# Should be specific about what's failing without giving the answer.
+# If omitted, counterfactual mode is skipped for this scenario.
+counterfactual_prompt: >
+  Some acceptance criteria are failing. [Describe what's wrong in
+  general terms — don't give the exact fix.]
+
+# Required. Define the GSD phases/tasks the agent will work on.
+# Each phase has a number, title, and list of plan items.
+gsd_tasks:
+  - phase: 1
+    title: "Phase title"
+    plans:
+      - "First deliverable"
+      - "Second deliverable"
+      - "Third deliverable"
+
+  # Multi-phase example:
+  # - phase: 2
+  #   title: "Second phase title"
+  #   plans:
+  #     - "Another deliverable"
+
+# Required. Machine-verifiable acceptance criteria.
+# Each criterion MUST have:
+#   - id: unique string identifier
+#   - phase_ref: which GSD phase this validates (must match a gsd_tasks phase)
+#   - type: one of the supported check types (see below)
+#
+# Optional on any criterion:
+#   - retry: { attempts: N, delay_ms: M }  — override default retry behavior
+#
+# Supported check types:
+#
+#   file_exists        — path: relative file path
+#   file_not_exists    — path: relative file path
+#   content_matches    — path, pattern (regex), flags (optional)
+#   content_not_matches — path, pattern (regex), flags (optional)
+#   content_matches_glob — glob (string|string[]), pattern (regex), flags (optional)
+#   content_not_matches_glob — glob (string|string[]), pattern (regex), flags (optional)
+#   build_succeeds     — command (optional, default: "pnpm build")
+#   lint_passes        — command (optional, default: "pnpm lint")
+#   type_check_passes  — command (optional, default: "pnpm tsc --noEmit")
+#   http_request       — method, url, body/body_json/body_raw, headers, expect: { status, body_contains, body_not_contains, body_json_has_keys, headers }
+#   browser_visible    — url, viewport, assertions: [{ selector, text, visible }]
+#   browser_interaction — url, viewport, steps: [{ fill, click, wait, execute_js, assert_visible, assert_hidden, assert_url }]
+#
+acceptance_criteria:
+  - id: example-file
+    phase_ref: 1
+    type: file_exists
+    path: "src/example.ts"
+
+  - id: example-build
+    phase_ref: 1
+    type: build_succeeds
+
+  - id: example-http
+    phase_ref: 1
+    type: http_request
+    method: GET
+    url: "/api/example"
+    expect:
+      status: 200
+    retry: { attempts: 2, delay_ms: 1000 }

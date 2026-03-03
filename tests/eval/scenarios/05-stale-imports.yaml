@@ -1,0 +1,92 @@
+name: "Stale Imports and Dead Code"
+description: >
+  Agent is asked to refactor a utility module by renaming functions and
+  splitting into separate files. Agents commonly rename the definitions
+  but leave stale imports, unused variables, and references to old
+  function names in consumer files.
+difficulty: easy
+tags: [refactoring, imports, lint, dead-code]
+
+fixture: nextjs-minimal
+reference_good: 05-stale-imports/known-good
+reference_bad: 05-stale-imports/known-bad
+
+counterfactual_prompt: >
+  Lint is reporting unused imports and references to old function names
+  that no longer exist. Please run `pnpm lint` and `pnpm tsc --noEmit`,
+  fix all stale imports and dead code, and verify everything passes.
+
+gsd_tasks:
+  - phase: 1
+    title: "Refactor utility module"
+    plans:
+      - "Rename formatDate to formatDateTime in src/lib/date-utils.ts"
+      - "Rename formatCurrency to formatMoney in src/lib/format-utils.ts"
+      - "Split src/lib/utils.ts helpers into domain-specific files"
+      - "Update all consumer files to use new names and paths"
+      - "Remove all unused imports and dead code"
+
+acceptance_criteria:
+  - id: date-utils-exists
+    phase_ref: 1
+    type: file_exists
+    path: "src/lib/date-utils.ts"
+
+  - id: format-utils-exists
+    phase_ref: 1
+    type: file_exists
+    path: "src/lib/format-utils.ts"
+
+  - id: build-succeeds
+    phase_ref: 1
+    type: build_succeeds
+
+  - id: type-check-passes
+    phase_ref: 1
+    type: type_check_passes
+
+  - id: lint-passes
+    phase_ref: 1
+    type: lint_passes
+
+  - id: old-name-formatDate-gone
+    phase_ref: 1
+    type: content_not_matches
+    path: "src/lib/date-utils.ts"
+    pattern: "export\\s+(function|const)\\s+formatDate\\b"
+    flags: "m"
+
+  - id: new-name-formatDateTime-exists
+    phase_ref: 1
+    type: content_matches
+    path: "src/lib/date-utils.ts"
+    pattern: "export\\s+(function|const)\\s+formatDateTime\\b"
+    flags: "m"
+
+  - id: old-name-formatCurrency-gone
+    phase_ref: 1
+    type: content_not_matches
+    path: "src/lib/format-utils.ts"
+    pattern: "export\\s+(function|const)\\s+formatCurrency\\b"
+    flags: "m"
+
+  - id: new-name-formatMoney-exists
+    phase_ref: 1
+    type: content_matches
+    path: "src/lib/format-utils.ts"
+    pattern: "export\\s+(function|const)\\s+formatMoney\\b"
+    flags: "m"
+
+  - id: no-stale-import-formatDate
+    phase_ref: 1
+    type: content_not_matches_glob
+    glob: ["src/**/*.ts", "src/**/*.tsx"]
+    pattern: "import\\s+\\{[^}]*\\bformatDate\\b[^}]*\\}\\s+from\\s+[\\\"'][^\\\"']*date-utils[\\\"']"
+    flags: "m"
+
+  - id: no-stale-import-formatCurrency
+    phase_ref: 1
+    type: content_not_matches_glob
+    glob: ["src/**/*.ts", "src/**/*.tsx"]
+    pattern: "import\\s+\\{[^}]*\\bformatCurrency\\b[^}]*\\}\\s+from\\s+[\\\"'][^\\\"']*format-utils[\\\"']"
+    flags: "m"

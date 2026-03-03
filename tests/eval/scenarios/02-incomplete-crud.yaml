@@ -1,0 +1,187 @@
+name: "Incomplete CRUD"
+description: >
+  Agent is asked to build a complete CRUD API for a "notes" resource.
+  Agents commonly implement Create and Read correctly but leave Update
+  and Delete broken, incomplete, or missing entirely.
+difficulty: medium
+tags: [api, crud, completeness]
+
+fixture: nextjs-minimal
+reference_good: 02-incomplete-crud/known-good
+reference_bad: 02-incomplete-crud/known-bad
+
+counterfactual_prompt: >
+  The CRUD API for notes is incomplete. The GET, PUT, and DELETE
+  endpoints for individual notes (by ID) have issues. Please verify
+  that all CRUD operations work: list, create, get by id, update,
+  and delete. Each should return the correct status codes.
+
+gsd_tasks:
+  - phase: 1
+    title: "Create notes CRUD API"
+    plans:
+      - "GET /api/notes returns a list of all notes"
+      - "POST /api/notes creates a new note with {title, content}"
+      - "GET /api/notes/[id] returns a single note"
+      - "PUT /api/notes/[id] updates a note"
+      - "DELETE /api/notes/[id] deletes a note"
+      - "404 for non-existent note IDs"
+
+acceptance_criteria:
+  - id: list-route-exists
+    phase_ref: 1
+    type: file_exists
+    path: "src/app/api/notes/route.ts"
+
+  - id: detail-route-exists
+    phase_ref: 1
+    type: file_exists
+    path: "src/app/api/notes/[id]/route.ts"
+
+  - id: build-passes
+    phase_ref: 1
+    type: build_succeeds
+
+  - id: detail-route-exports-put
+    phase_ref: 1
+    type: content_matches
+    path: "src/app/api/notes/[id]/route.ts"
+    pattern: "export\\s+async\\s+function\\s+PUT\\b"
+    flags: "m"
+
+  - id: detail-route-exports-delete
+    phase_ref: 1
+    type: content_matches
+    path: "src/app/api/notes/[id]/route.ts"
+    pattern: "export\\s+async\\s+function\\s+DELETE\\b"
+    flags: "m"
+
+  - id: detail-route-not-implemented-removed
+    phase_ref: 1
+    type: content_not_matches
+    path: "src/app/api/notes/[id]/route.ts"
+    pattern: "Not implemented|status:\\s*500"
+    flags: "m"
+
+  - id: create-note
+    phase_ref: 1
+    type: http_request
+    method: POST
+    url: "/api/notes"
+    body:
+      title: "Test Note"
+      content: "This is a test note body."
+    expect:
+      status: 201
+      body_contains: ["Test Note"]
+    retry: { attempts: 3, delay_ms: 1000 }
+
+  - id: create-returns-id
+    phase_ref: 1
+    type: http_request
+    method: POST
+    url: "/api/notes"
+    body:
+      title: "Second Note"
+      content: "Second body."
+    expect:
+      status: 201
+      body_json_has_keys: ["id", "title", "content"]
+
+  - id: list-notes
+    phase_ref: 1
+    type: http_request
+    method: GET
+    url: "/api/notes"
+    expect:
+      status: 200
+      body_contains: ["Test Note"]
+
+  - id: create-note-missing-title
+    phase_ref: 1
+    type: http_request
+    method: POST
+    url: "/api/notes"
+    body:
+      content: "No title"
+    expect:
+      status: 400
+
+  - id: get-note-by-id
+    phase_ref: 1
+    type: http_request
+    method: GET
+    url: "/api/notes/1"
+    expect:
+      status: 200
+      body_contains: ["Test Note"]
+
+  - id: get-note-not-found
+    phase_ref: 1
+    type: http_request
+    method: GET
+    url: "/api/notes/99999"
+    expect:
+      status: 404
+
+  - id: update-note
+    phase_ref: 1
+    type: http_request
+    method: PUT
+    url: "/api/notes/1"
+    body:
+      title: "Updated Note"
+      content: "Updated content."
+    expect:
+      status: 200
+      body_contains: ["Updated Note"]
+
+  - id: update-preserves-created-at
+    phase_ref: 1
+    type: content_matches
+    path: "src/app/api/notes/[id]/route.ts"
+    pattern: "notes\\[index\\]\\s*=\\s*\\{\\s*\\.\\.\\.notes\\[index\\]"
+    flags: "m"
+
+  - id: update-note-not-found
+    phase_ref: 1
+    type: http_request
+    method: PUT
+    url: "/api/notes/99999"
+    body:
+      title: "Ghost"
+      content: "Does not exist."
+    expect:
+      status: 404
+
+  - id: delete-note
+    phase_ref: 1
+    type: http_request
+    method: DELETE
+    url: "/api/notes/1"
+    expect:
+      status: 200
+
+  - id: delete-note-not-found
+    phase_ref: 1
+    type: http_request
+    method: DELETE
+    url: "/api/notes/99999"
+    expect:
+      status: 404
+
+  - id: get-after-delete
+    phase_ref: 1
+    type: http_request
+    method: GET
+    url: "/api/notes/1"
+    expect:
+      status: 404
+
+  - id: delete-is-idempotent
+    phase_ref: 1
+    type: http_request
+    method: DELETE
+    url: "/api/notes/1"
+    expect:
+      status: 404

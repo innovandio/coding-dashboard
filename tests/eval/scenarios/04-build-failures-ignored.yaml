@@ -1,0 +1,100 @@
+name: "Build Failures Ignored"
+description: >
+  Agent is asked to add a feature to existing code that has deliberate
+  type complexity. Agents sometimes introduce TypeScript errors, broken
+  imports, or module resolution failures but claim the phase is done
+  without actually running the build. This scenario's criteria are
+  heavily weighted toward build/type/lint passing.
+difficulty: medium
+tags: [typescript, build, imports, type-safety]
+
+fixture: nextjs-minimal
+reference_good: 04-build-failures-ignored/known-good
+reference_bad: 04-build-failures-ignored/known-bad
+
+counterfactual_prompt: >
+  The build is failing with TypeScript errors. Please run `pnpm build`
+  and `pnpm tsc --noEmit`, fix all type errors and broken imports, then
+  verify the build succeeds before marking this done.
+
+gsd_tasks:
+  - phase: 1
+    title: "Add typed API client with error handling"
+    plans:
+      - "Create src/lib/api-client.ts with typed fetch wrapper"
+      - "Define request/response types for user, note, and settings endpoints"
+      - "Add error types and discriminated union for API responses"
+      - "Create src/hooks/use-api.ts React hook that uses the client"
+      - "All files must pass strict TypeScript checks"
+
+acceptance_criteria:
+  - id: api-client-exists
+    phase_ref: 1
+    type: file_exists
+    path: "src/lib/api-client.ts"
+
+  - id: hook-exists
+    phase_ref: 1
+    type: file_exists
+    path: "src/hooks/use-api.ts"
+
+  - id: build-succeeds
+    phase_ref: 1
+    type: build_succeeds
+
+  - id: type-check-passes
+    phase_ref: 1
+    type: type_check_passes
+
+  - id: lint-passes
+    phase_ref: 1
+    type: lint_passes
+
+  - id: api-client-has-types
+    phase_ref: 1
+    type: content_matches
+    path: "src/lib/api-client.ts"
+    pattern: "interface|type\\s+\\w+.*="
+    flags: "m"
+
+  - id: hook-imports-client
+    phase_ref: 1
+    type: content_matches
+    path: "src/hooks/use-api.ts"
+    pattern: "import.*api-client"
+    flags: "m"
+
+  - id: no-any-types
+    phase_ref: 1
+    type: content_not_matches
+    path: "src/lib/api-client.ts"
+    pattern: ":\\s*any\\b"
+    flags: "m"
+
+  - id: no-ts-ignore-api-client
+    phase_ref: 1
+    type: content_not_matches
+    path: "src/lib/api-client.ts"
+    pattern: "@ts-ignore|@ts-expect-error"
+    flags: "m"
+
+  - id: no-ts-ignore-hook
+    phase_ref: 1
+    type: content_not_matches
+    path: "src/hooks/use-api.ts"
+    pattern: "@ts-ignore|@ts-expect-error"
+    flags: "m"
+
+  - id: error-types-exist
+    phase_ref: 1
+    type: content_matches
+    path: "src/lib/api-client.ts"
+    pattern: "Error|error|ApiError|ApiResult"
+    flags: "m"
+
+  - id: discriminated-union-exists
+    phase_ref: 1
+    type: content_matches
+    path: "src/lib/api-client.ts"
+    pattern: "ok\\s*:\\s*true|ok\\s*:\\s*false|ApiSuccess\\s*<|ApiError"
+    flags: "m"

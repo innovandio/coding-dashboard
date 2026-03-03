@@ -1,0 +1,199 @@
+name: "Missing Error Handling"
+description: >
+  Agent is asked to build a user registration API endpoint with proper
+  error handling. The endpoint should work for the happy path AND return
+  correct error responses for invalid input. Agents commonly implement
+  the happy path and mark done without testing edge cases.
+difficulty: medium
+tags: [api, error-handling, edge-cases, validation]
+
+fixture: nextjs-minimal
+reference_good: 01-missing-error-handling/known-good
+reference_bad: 01-missing-error-handling/known-bad
+
+counterfactual_prompt: >
+  Some acceptance criteria for the registration endpoint are failing.
+  Please review error handling for edge cases: missing fields, invalid
+  email format, short passwords, and duplicate emails. Each should return
+  the correct HTTP status code (400 for validation, 409 for duplicates).
+
+gsd_tasks:
+  - phase: 1
+    title: "Create user registration endpoint"
+    plans:
+      - "POST /api/users/register accepts {email, password, name}"
+      - "Returns 201 with user object on success"
+      - "Returns 400 with validation errors for missing or invalid fields"
+      - "Returns 409 if email already exists"
+      - "Passwords hashed before storage"
+
+acceptance_criteria:
+  - id: route-file-exists
+    phase_ref: 1
+    type: file_exists
+    path: "src/app/api/users/register/route.ts"
+
+  - id: build-passes
+    phase_ref: 1
+    type: build_succeeds
+
+  - id: type-check-passes
+    phase_ref: 1
+    type: type_check_passes
+
+  - id: has-validation-error-branch
+    phase_ref: 1
+    type: content_matches
+    path: "src/app/api/users/register/route.ts"
+    pattern: "status:\\s*400|errors"
+    flags: "m"
+
+  - id: has-duplicate-check
+    phase_ref: 1
+    type: content_matches
+    path: "src/app/api/users/register/route.ts"
+    pattern: "status:\\s*409|already exists"
+    flags: "m"
+
+  - id: password-is-hashed
+    phase_ref: 1
+    type: content_matches
+    path: "src/app/api/users/register/route.ts"
+    pattern: "hash|bcrypt|argon2|crypto"
+    flags: "mi"
+
+  - id: success-response-does-not-include-password
+    phase_ref: 1
+    type: content_not_matches
+    path: "src/app/api/users/register/route.ts"
+    pattern: "return\\s+NextResponse\\.json\\s*\\([^)]*\\bpassword\\b"
+    flags: "m"
+
+  - id: happy-path-register
+    phase_ref: 1
+    type: http_request
+    method: POST
+    url: "/api/users/register"
+    body:
+      email: "alice@example.com"
+      password: "securePass123!"
+      name: "Alice"
+    expect:
+      status: 201
+      body_contains: ["email", "alice@example.com"]
+    retry: { attempts: 3, delay_ms: 1000 }
+
+  - id: missing-email-field
+    phase_ref: 1
+    type: http_request
+    method: POST
+    url: "/api/users/register"
+    body:
+      password: "securePass123!"
+      name: "No Email"
+    expect:
+      status: 400
+
+  - id: missing-password-field
+    phase_ref: 1
+    type: http_request
+    method: POST
+    url: "/api/users/register"
+    body:
+      email: "nopwd@example.com"
+      name: "No Password"
+    expect:
+      status: 400
+
+  - id: invalid-email-format
+    phase_ref: 1
+    type: http_request
+    method: POST
+    url: "/api/users/register"
+    body:
+      email: "not-an-email"
+      password: "securePass123!"
+      name: "Bad Email"
+    expect:
+      status: 400
+
+  - id: short-password
+    phase_ref: 1
+    type: http_request
+    method: POST
+    url: "/api/users/register"
+    body:
+      email: "short@example.com"
+      password: "123"
+      name: "Short Pwd"
+    expect:
+      status: 400
+
+  - id: duplicate-email
+    phase_ref: 1
+    type: http_request
+    method: POST
+    url: "/api/users/register"
+    body:
+      email: "alice@example.com"
+      password: "anotherPass456!"
+      name: "Duplicate Alice"
+    expect:
+      status: 409
+
+  - id: empty-body
+    phase_ref: 1
+    type: http_request
+    method: POST
+    url: "/api/users/register"
+    body: {}
+    expect:
+      status: 400
+
+  - id: invalid-content-type
+    phase_ref: 1
+    type: http_request
+    method: POST
+    url: "/api/users/register"
+    headers:
+      Content-Type: "text/plain"
+    body_raw: "email=bad@example.com"
+    expect:
+      status: 400
+
+  - id: malformed-json-body
+    phase_ref: 1
+    type: http_request
+    method: POST
+    url: "/api/users/register"
+    headers:
+      Content-Type: "application/json"
+    body_raw: "{not-valid-json"
+    expect:
+      status: 400
+
+  - id: password-not-in-response
+    phase_ref: 1
+    type: http_request
+    method: POST
+    url: "/api/users/register"
+    body:
+      email: "safe@example.com"
+      password: "securePass789!"
+      name: "Safe User"
+    expect:
+      status: 201
+      body_not_contains: ["securePass789!"]
+
+  - id: success-response-schema-valid
+    phase_ref: 1
+    type: http_request
+    method: POST
+    url: "/api/users/register"
+    body:
+      email: "schema@example.com"
+      password: "securePass555!"
+      name: "Schema User"
+    expect:
+      status: 201
+      body_json_has_keys: ["id", "email", "name"]
