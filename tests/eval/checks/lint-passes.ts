@@ -10,10 +10,9 @@ export const lintPassesCheck: CheckHandler = {
   async run(criterion: AcceptanceCriterion, context: CheckContext): Promise<CheckResult> {
     const start = performance.now();
     const command = (criterion.command as string) ?? "pnpm lint";
-    const [cmd, ...args] = command.split(" ");
 
     try {
-      await execFileAsync(cmd, args, {
+      await execFileAsync("sh", ["-c", command], {
         cwd: context.workspacePath,
         timeout: 60_000,
       });

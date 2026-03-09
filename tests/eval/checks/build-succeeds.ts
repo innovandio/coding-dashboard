@@ -10,10 +10,9 @@ export const buildSucceedsCheck: CheckHandler = {
   async run(criterion: AcceptanceCriterion, context: CheckContext): Promise<CheckResult> {
     const start = performance.now();
     const command = (criterion.command as string) ?? "pnpm build";
-    const [cmd, ...args] = command.split(" ");
 
     try {
-      const { stderr } = await execFileAsync(cmd, args, {
+      const { stderr } = await execFileAsync("sh", ["-c", command], {
         cwd: context.workspacePath,
         timeout: 120_000,
         env: { ...process.env, NODE_ENV: "production" },
