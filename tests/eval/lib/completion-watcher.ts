@@ -78,9 +78,13 @@ export function watchForCompletion(
 
     for (const phase of donePhases) {
       if (knownDone.has(phase)) continue;
-      knownDone.add(phase);
-      const snapshot = await captureClaimSnapshot(workspacePath, phase, baseSha);
-      await onPhaseComplete(phase, snapshot);
+      try {
+        const snapshot = await captureClaimSnapshot(workspacePath, phase, baseSha);
+        await onPhaseComplete(phase, snapshot);
+        knownDone.add(phase);
+      } catch (err) {
+        console.error(`[completion-watcher] Phase ${phase} callback failed:`, err);
+      }
     }
   }
 
