@@ -6,6 +6,7 @@ import {
   writeCustomProviderConfig,
 } from "@/lib/model-providers";
 import { requireAuth } from "@/lib/auth-utils";
+import { getValidOpenAIToken } from "@/lib/openai-token-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -46,14 +47,32 @@ export async function POST(req: NextRequest) {
         agentId,
       });
     } else {
-      const { modelKey, provider, apiKey } = body;
-      if (!modelKey || !provider || !apiKey) {
+      const { modelKey, provider, apiKey, openaiAuthenticated } = body;
+      if (!modelKey || !provider) {
+        return NextResponse.json({ error: "modelKey and provider are required" }, { status: 400 });
+      }
+
+      // For OpenAI providers with OAuth, use stored token instead of apiKey
+      const providerLower = provider.toLowerCase();
+      const isOpenAI = providerLower.includes("openai") || providerLower.includes("codex");
+      let token = apiKey;
+
+      if (isOpenAI && openaiAuthenticated && !apiKey) {
+        const userId = session.user?.id;
+        if (!userId) {
+          return NextResponse.json({ error: "No user ID in session" }, { status: 401 });
+        }
+        token = await getValidOpenAIToken(userId);
+      }
+
+      if (!token) {
         return NextResponse.json(
-          { error: "modelKey, provider, and apiKey are required" },
+          { error: "apiKey is required (or sign in with OpenAI)" },
           { status: 400 },
         );
       }
-      await pasteAuthToken(provider, apiKey, agentId);
+
+      await pasteAuthToken(provider, token, agentId);
       await setDefaultModel(modelKey, agentId);
     }
 

@@ -225,10 +225,18 @@ export function useDashboardState() {
     fetchProjects();
   }, [fetchProjects]);
 
-  // Auto-select first project when projects load and none is selected
+  // Auto-select first project, or clear selection if selected project was deleted
   useEffect(() => {
     if (!selectedProjectId && projects.length > 0) {
       setSelectedProjectId(projects[0].id);
+    } else if (
+      selectedProjectId &&
+      projects.length > 0 &&
+      !projects.find((p) => p.id === selectedProjectId)
+    ) {
+      setSelectedProjectId(projects[0].id);
+    } else if (selectedProjectId && projects.length === 0) {
+      setSelectedProjectId(null);
     }
   }, [projects, selectedProjectId]);
 

@@ -24,18 +24,43 @@ if [ ! -L "$CLAUDE_JSON_LINK" ]; then
   echo "[entrypoint] Symlinked .claude.json -> .claude/.claude.json"
 fi
 
-# Update Claude Code via native installer (non-blocking on failure).
-echo "[entrypoint] Updating Claude Code..."
-curl -fsSL https://claude.ai/install.sh | bash > /dev/null 2>&1 || echo "[entrypoint] Claude Code update failed, using installed version"
-echo "[entrypoint] Claude Code version: $(/root/.local/bin/claude --version 2>/dev/null || echo 'unknown')"
+# Only run updates once per day. The stamp file lives on the persistent
+# openclaw volume so it survives container recreates but not volume resets.
+UPDATE_STAMP="/root/.openclaw/.last-update"
+NEEDS_UPDATE=true
+if [ -f "$UPDATE_STAMP" ]; then
+  last=$(cat "$UPDATE_STAMP" 2>/dev/null || echo 0)
+  now=$(date +%s)
+  age=$(( now - last ))
+  if [ "$age" -lt 86400 ]; then
+    NEEDS_UPDATE=false
+    echo "[entrypoint] Updates ran $(( age / 3600 ))h ago, skipping (next in $(( (86400 - age) / 3600 ))h)"
+  fi
+fi
 
-# Update OpenClaw from GitHub (non-blocking on failure).
-echo "[entrypoint] Updating OpenClaw..."
-(cd /app && git pull --ff-only && pnpm install --frozen-lockfile && pnpm build && pnpm ui:build) > /dev/null 2>&1 || echo "[entrypoint] OpenClaw update failed, using installed version"
+if [ "$NEEDS_UPDATE" = true ]; then
+  # Update Claude Code via native installer (async, non-blocking on failure).
+  echo "[entrypoint] Updating Claude Code (background)..."
+  (
+    curl -fsSL https://claude.ai/install.sh | bash > /dev/null 2>&1 \
+      && echo "[entrypoint] Claude Code updated: $(/root/.local/bin/claude --version 2>/dev/null || echo 'unknown')" \
+      || echo "[entrypoint] Claude Code update failed, using installed version"
+  ) &
 
-# Update Get Shit Done (GSD) skills (non-blocking on failure).
-echo "[entrypoint] Updating GSD..."
-npx -y get-shit-done-cc@latest --claude --global > /dev/null 2>&1 || echo "[entrypoint] GSD update failed, using installed version"
+  # Update OpenClaw from GitHub (synchronous, must complete before gateway starts).
+  echo "[entrypoint] Updating OpenClaw..."
+  (cd /app && git pull --ff-only && pnpm install --frozen-lockfile && pnpm build && pnpm ui:build) > /dev/null 2>&1 || echo "[entrypoint] OpenClaw update failed, using installed version"
+
+  # Update Get Shit Done (GSD) skills (async, non-blocking on failure).
+  echo "[entrypoint] Updating GSD (background)..."
+  (
+    npx -y get-shit-done-cc@latest --claude --global > /dev/null 2>&1 \
+      && echo "[entrypoint] GSD updated" \
+      || echo "[entrypoint] GSD update failed, using installed version"
+  ) &
+
+  date +%s > "$UPDATE_STAMP"
+fi
 
 # Ensure hasCompletedOnboarding is set AFTER the update — the installer may
 # overwrite .claude.json with its own defaults. Merge it into whatever exists.

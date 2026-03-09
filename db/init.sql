@@ -54,3 +54,17 @@ VALUES (
 )
 ON CONFLICT (email) DO NOTHING;
 
+-- OpenAI OAuth tokens (encrypted at rest via pgcrypto)
+CREATE TABLE IF NOT EXISTS openai_tokens (
+  id            text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  user_id       text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  access_token  bytea NOT NULL,
+  refresh_token bytea NOT NULL,
+  id_token      text,
+  expires_at    timestamptz NOT NULL,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(user_id)
+);
+CREATE INDEX IF NOT EXISTS openai_tokens_user_id_idx ON openai_tokens(user_id);
+

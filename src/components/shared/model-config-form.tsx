@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Select,
   SelectContent,
@@ -10,6 +10,9 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { useOpenAILoginStream } from "@/hooks/use-openai-login-stream";
+import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 
 export interface CatalogModel {
   key: string;
@@ -37,6 +40,8 @@ export interface ModelConfigState {
   customModelId: string;
   // Shared
   apiKey: string;
+  // OpenAI OAuth (set when user signs in via browser)
+  openaiAuthenticated?: boolean;
 }
 
 interface Props {
@@ -46,8 +51,18 @@ interface Props {
   compact?: boolean;
 }
 
+function isOpenAIProvider(id: string): boolean {
+  const lower = id.toLowerCase();
+  return lower.includes("openai") || lower.includes("codex");
+}
+
 export function isModelConfigValid(state: ModelConfigState): boolean {
-  if (!state.apiKey) return false;
+  const needsApiKey = !(
+    state.mode === "catalog" &&
+    isOpenAIProvider(state.provider) &&
+    state.openaiAuthenticated
+  );
+  if (needsApiKey && !state.apiKey) return false;
   if (state.mode === "catalog") {
     return !!(state.provider && state.modelKey);
   }
@@ -72,6 +87,9 @@ const CUSTOM_SENTINEL = "__custom__";
 export function ModelConfigForm({ value, onChange, disabled, compact }: Props) {
   const [catalog, setCatalog] = useState<ProviderGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loginActive, setLoginActive] = useState(false);
+
+  const { loginState, exitCode, oauthUrl } = useOpenAILoginStream(loginActive);
 
   useEffect(() => {
     fetch("/api/model-config")
@@ -81,6 +99,44 @@ export function ModelConfigForm({ value, onChange, disabled, compact }: Props) {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+  }, []);
+
+  // Check OpenAI auth status when an OpenAI provider is selected
+  useEffect(() => {
+    if (value.mode === "catalog" && isOpenAIProvider(value.provider)) {
+      fetch("/api/openai-login/status")
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.authenticated && !value.openaiAuthenticated) {
+            onChange({ ...value, openaiAuthenticated: true });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [value.provider]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-open OAuth URL when it arrives
+  useEffect(() => {
+    if (oauthUrl) {
+      window.open(oauthUrl, "_blank");
+    }
+  }, [oauthUrl]);
+
+  // Auto-complete on success after 2s delay
+  useEffect(() => {
+    if (loginState === "exited" && exitCode === 0) {
+      const timer = setTimeout(() => {
+        setLoginActive(false);
+        onChange({ ...value, openaiAuthenticated: true });
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [loginState, exitCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRetry = useCallback(() => {
+    setLoginActive(false);
+    // Reset by toggling off then on in next tick
+    setTimeout(() => setLoginActive(true), 0);
   }, []);
 
   const provider = catalog.find((p) => p.id === value.provider);
@@ -207,17 +263,83 @@ export function ModelConfigForm({ value, onChange, disabled, compact }: Props) {
         </div>
       )}
 
-      <div className="space-y-1">
-        <Label className={labelCls}>API Key</Label>
-        <Input
-          type="password"
-          value={value.apiKey}
-          onChange={(e) => onChange({ ...value, apiKey: e.target.value })}
-          placeholder="API key"
-          className={inputCls}
-          disabled={disabled}
-        />
-      </div>
+      {!isCustom && isOpenAIProvider(value.provider) ? (
+        <div className="space-y-1">
+          <Label className={labelCls}>Authentication</Label>
+          {value.openaiAuthenticated ? (
+            <div className="flex items-center gap-2 text-xs text-green-600">
+              <CheckCircle2 className="h-4 w-4" />
+              Signed in with OpenAI
+            </div>
+          ) : loginState === "exited" && exitCode === 0 ? (
+            <div className="flex items-center gap-2 text-xs text-green-600">
+              <CheckCircle2 className="h-4 w-4" />
+              Signed in with OpenAI
+            </div>
+          ) : loginState === "exited" ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs text-destructive">
+                <XCircle className="h-4 w-4" />
+                Login failed
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full bg-white text-black border text-xs"
+                onClick={handleRetry}
+                disabled={disabled}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : loginState === "exchanging" ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Completing login...
+            </div>
+          ) : loginActive && oauthUrl ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Complete sign-in in browser...
+            </div>
+          ) : loginActive ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full bg-white text-black border text-xs"
+              disabled
+            >
+              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+              Preparing...
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full bg-white text-black border text-xs"
+              onClick={() => setLoginActive(true)}
+              disabled={disabled}
+            >
+              Sign in with OpenAI
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-1">
+          <Label className={labelCls}>API Key</Label>
+          <Input
+            type="password"
+            value={value.apiKey}
+            onChange={(e) => onChange({ ...value, apiKey: e.target.value })}
+            placeholder="API key"
+            className={inputCls}
+            disabled={disabled}
+          />
+        </div>
+      )}
     </div>
   );
 }

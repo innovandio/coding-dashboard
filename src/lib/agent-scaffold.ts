@@ -6,6 +6,12 @@ import { getPool } from "./db";
 
 const execFileAsync = promisify(execFile);
 const TEMPLATES_DIR = join(process.cwd(), "agent-templates");
+
+const EMOJIS = "🦊🐙🦉🐝🦋🐬🦎🐢🦜🐧🦀🐳🦈🐺🦁🐯🐻🐨🐼🐸🦩🦚🐿️🦔🦦🦡🐞🐌🦂🦑";
+function randomEmoji(): string {
+  const chars = [...EMOJIS];
+  return chars[Math.floor(Math.random() * chars.length)];
+}
 const COMPOSE_OVERRIDE = join(process.cwd(), "docker-compose.override.yml");
 
 /** Path inside the gateway container where the agentdata volume is mounted */
@@ -68,6 +74,7 @@ export async function scaffoldAgentFiles(ctx: ScaffoldContext): Promise<void> {
     let content = await readFile(join(TEMPLATES_DIR, file), "utf-8");
     content = content.replaceAll("{{projectName}}", ctx.projectName);
     content = content.replaceAll("{{projectId}}", ctx.projectId);
+    content = content.replaceAll("{{randomEmoji}}", randomEmoji());
 
     // Write file into the container via base64 to avoid stdin piping issues
     const b64 = Buffer.from(content).toString("base64");

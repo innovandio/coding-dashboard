@@ -182,13 +182,26 @@ function checkNeedsSetup(state: IngestorState): void {
     "openclaw-gateway",
     "sh",
     "-c",
-    "test -f $HOME/.openclaw/openclaw.json",
+    // Exit 0 = file exists, exit 1 = file missing, exit 2 = container error
+    "test -f $HOME/.openclaw/openclaw.json && exit 0 || exit 1",
   ])
     .then(() => {
       state.needsSetup = false;
     })
-    .catch(() => {
-      state.needsSetup = true;
+    .catch((err: { code?: number; stderr?: string; message?: string }) => {
+      // Only mark needsSetup if the command actually ran and the file was
+      // missing (exit code 1). If the container is restarting or unreachable,
+      // the exec itself fails — keep the previous state to avoid flashing
+      // the setup dialog during restarts.
+      const stderr = (err.stderr ?? err.message ?? "").toLowerCase();
+      const containerUnavailable =
+        stderr.includes("is not running") ||
+        stderr.includes("is restarting") ||
+        stderr.includes("no such container") ||
+        stderr.includes("connection refused");
+      if (!containerUnavailable) {
+        state.needsSetup = true;
+      }
     })
     .finally(() => {
       state.needsSetupCheckedAt = Date.now();
