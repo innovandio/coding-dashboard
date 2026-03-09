@@ -84,7 +84,7 @@ function createCounterfactualOptions(command: string, timeoutMs: number): Counte
     timeout: timeoutMs,
     async sendPromptAndWait(prompt: string) {
       console.log("\n  Sending counterfactual prompt via command...");
-      await execFileAsync("sh", ["-lc", command], {
+      await execFileAsync("sh", ["-c", command], {
         env: {
           ...process.env,
           EVAL_COUNTERFACTUAL_PROMPT: prompt,
@@ -163,7 +163,7 @@ async function main() {
     return;
   }
 
-  // Mode 4: Full eval suite (static)
+  // Mode 3: Full eval suite (static)
   if (values.all) {
     await runAll({ baseUrl, outputDir });
     return;
