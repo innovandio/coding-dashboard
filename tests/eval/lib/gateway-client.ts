@@ -85,13 +85,17 @@ export class GatewayClient {
   }
 
   private async fetch(path: string, init?: RequestInit): Promise<Response> {
+    const headers = new Headers(init?.headers);
+    if (!headers.has("Cookie")) {
+      headers.set("Cookie", this.authCookie);
+    }
+    if (init?.body != null && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+
     const response = await globalThis.fetch(`${this.dashboardUrl}${path}`, {
       ...init,
-      headers: {
-        "Content-Type": "application/json",
-        Cookie: this.authCookie,
-        ...(init?.headers ?? {}),
-      },
+      headers,
     });
     return response;
   }
