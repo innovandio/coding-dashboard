@@ -21,14 +21,25 @@ export interface CounterfactualOptions {
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number | undefined): Promise<T> {
   if (!timeoutMs || timeoutMs <= 0) return promise;
 
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => {
-      setTimeout(() => {
-        reject(new Error(`Counterfactual prompt timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-    }),
-  ]);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        controller.signal.addEventListener(
+          "abort",
+          () => {
+            reject(new Error(`Counterfactual prompt timed out after ${timeoutMs}ms`));
+          },
+          { once: true },
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function diagnose(
