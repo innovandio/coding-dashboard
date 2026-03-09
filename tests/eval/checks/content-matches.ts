@@ -64,6 +64,8 @@ function normalizePath(value: string): string {
   return value.replaceAll("\\", "/");
 }
 
+const WALK_SKIP_DIRS = new Set(["node_modules", ".next", ".git"]);
+
 async function walkFiles(rootDir: string, dir = ""): Promise<string[]> {
   const current = join(rootDir, dir);
   const entries = await readdir(current, { withFileTypes: true });
@@ -72,6 +74,7 @@ async function walkFiles(rootDir: string, dir = ""): Promise<string[]> {
   for (const entry of entries) {
     const relPath = dir ? `${dir}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
+      if (WALK_SKIP_DIRS.has(entry.name)) continue;
       files.push(...(await walkFiles(rootDir, relPath)));
     } else if (entry.isFile()) {
       files.push(normalizePath(relPath));
