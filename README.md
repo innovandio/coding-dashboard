@@ -64,6 +64,15 @@ A real-time dashboard for monitoring and controlling AI coding agents running in
 | `pnpm start` | Start production server                        |
 | `pnpm lint`  | Run ESLint                                     |
 
+### Eval Framework
+
+- `pnpm eval --all` — static eval against scaffolded scenarios
+- `pnpm eval --all-live --dashboard-url http://localhost:3000 --auth-cookie \"<cookie>\"` — live solver eval via dashboard APIs
+- `pnpm eval --reference-check --all` — static reference calibration
+- `pnpm eval --reference-check --all --full-reference-check` — runtime calibration (spins local app servers per reference if needed)
+
+Live mode prerequisites: dashboard must be running, gateway setup/login completed, and a valid auth cookie provided via `--auth-cookie` or `EVAL_AUTH_COOKIE`.
+
 ## Architecture
 
 ```

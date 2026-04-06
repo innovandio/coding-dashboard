@@ -12,6 +12,7 @@
 ### Daily Notes (`memory/YYYY-MM-DD.md`)
 
 Write entries after meaningful events:
+
 - Decisions made and their reasoning
 - Phase completions and verification results
 - Blockers encountered and how they were resolved
@@ -20,6 +21,7 @@ Write entries after meaningful events:
 ### Long-term Memory (`MEMORY.md`)
 
 Update only when you've confirmed a stable pattern:
+
 - Architectural decisions that affect future work
 - User preferences discovered through interaction
 - Recurring problems and their solutions
@@ -56,14 +58,14 @@ Run these inside a `claude` session (see `TOOLS.md`):
 
 ### Error Recovery
 
-| Situation | Action |
-|-----------|--------|
-| Phase execution fails | Read the error. Fix the root cause (missing dependency, wrong path, bad config), then re-run. |
-| Claude Code asks a question you can't answer | State what you know, make a reasonable decision, and document the assumption in memory. |
-| Phase output is wrong but the plan was good | Give specific feedback on what's wrong and re-run execution. |
-| Phase output is wrong because the plan was flawed | Re-run `/gsd:plan-phase N` with corrected requirements. |
-| Claude Code session crashes | Kill the process, start a new session, run `/gsd:resume-work`. |
-| GSD state seems corrupted | Check `.planning/` directory contents. Run `/gsd:health` to diagnose. |
+| Situation                                         | Action                                                                                        |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Phase execution fails                             | Read the error. Fix the root cause (missing dependency, wrong path, bad config), then re-run. |
+| Claude Code asks a question you can't answer      | State what you know, make a reasonable decision, and document the assumption in memory.       |
+| Phase output is wrong but the plan was good       | Give specific feedback on what's wrong and re-run execution.                                  |
+| Phase output is wrong because the plan was flawed | Re-run `/gsd:plan-phase N` with corrected requirements.                                       |
+| Claude Code session crashes                       | Kill the process, start a new session, run `/gsd:resume-work`.                                |
+| GSD state seems corrupted                         | Check `.planning/` directory contents. Run `/gsd:health` to diagnose.                         |
 
 ### Completion Gate
 

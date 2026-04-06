@@ -1,0 +1,134 @@
+name: "Broken Responsive Layout"
+description: >
+  Agent is asked to build a responsive dashboard page with a sidebar,
+  header, and content area. Agents commonly make it look correct at
+  desktop width but break the layout at tablet and mobile viewports.
+  This scenario checks three viewport sizes.
+difficulty: hard
+tags: [ui, responsive, layout, browser]
+
+fixture: nextjs-minimal
+reference_good: 03-broken-responsive/known-good
+reference_bad: 03-broken-responsive/known-bad
+
+counterfactual_prompt: >
+  The dashboard layout is breaking on smaller viewports. The sidebar
+  should collapse into a hamburger menu on mobile (< 768px), and the
+  content area should not overflow horizontally. Please test at 375px,
+  768px, and 1280px widths.
+
+gsd_tasks:
+  - phase: 1
+    title: "Build responsive dashboard layout"
+    plans:
+      - "Create page at /dashboard with sidebar, header, and content area"
+      - "Sidebar visible on desktop (1280px+), collapses to hamburger on mobile"
+      - "Header spans full width with title and user avatar placeholder"
+      - "Content area fills remaining space without horizontal overflow"
+      - "Smooth transitions between breakpoints"
+
+acceptance_criteria:
+  - id: page-file-exists
+    phase_ref: 1
+    type: file_exists
+    path: "src/app/dashboard/page.tsx"
+
+  - id: build-passes
+    phase_ref: 1
+    type: build_succeeds
+
+  - id: mobile-toggle-implemented
+    phase_ref: 1
+    type: content_matches
+    path: "src/app/dashboard/page.tsx"
+    pattern: "mobile-menu-toggle|aria-label=\\\"Toggle menu\\\"|md:hidden"
+    flags: "m"
+
+  - id: sidebar-uses-responsive-class
+    phase_ref: 1
+    type: content_matches
+    path: "src/app/dashboard/page.tsx"
+    pattern: "md:block|md:hidden"
+    flags: "m"
+
+  - id: desktop-sidebar-visible
+    phase_ref: 1
+    type: browser_visible
+    url: "/dashboard"
+    viewport: { width: 1280, height: 800 }
+    assertions:
+      - selector: "[data-testid='sidebar'], nav, aside"
+        visible: true
+      - selector: "header, [data-testid='header']"
+        visible: true
+    retry: { attempts: 2, delay_ms: 2000 }
+
+  - id: desktop-no-overflow
+    phase_ref: 1
+    type: browser_interaction
+    url: "/dashboard"
+    viewport: { width: 1280, height: 800 }
+    steps:
+      - execute_js:
+          expression: "document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+          expect_truthy: true
+
+  - id: tablet-layout
+    phase_ref: 1
+    type: browser_visible
+    url: "/dashboard"
+    viewport: { width: 768, height: 1024 }
+    assertions:
+      - selector: "header, [data-testid='header']"
+        visible: true
+    retry: { attempts: 2, delay_ms: 2000 }
+
+  - id: mobile-hamburger-exists
+    phase_ref: 1
+    type: browser_visible
+    url: "/dashboard"
+    viewport: { width: 375, height: 812 }
+    assertions:
+      - selector: "button[aria-label*='menu' i], button[data-testid='hamburger'], [data-testid='mobile-menu-toggle']"
+        visible: true
+    retry: { attempts: 2, delay_ms: 2000 }
+
+  - id: mobile-sidebar-hidden
+    phase_ref: 1
+    type: browser_visible
+    url: "/dashboard"
+    viewport: { width: 375, height: 812 }
+    assertions:
+      - selector: "[data-testid='sidebar'], aside.sidebar"
+        visible: false
+    retry: { attempts: 2, delay_ms: 2000 }
+
+  - id: mobile-header-visible
+    phase_ref: 1
+    type: browser_visible
+    url: "/dashboard"
+    viewport: { width: 375, height: 812 }
+    assertions:
+      - selector: "header, [data-testid='header']"
+        visible: true
+    retry: { attempts: 2, delay_ms: 2000 }
+
+  - id: tablet-no-overflow
+    phase_ref: 1
+    type: browser_interaction
+    url: "/dashboard"
+    viewport: { width: 768, height: 1024 }
+    steps:
+      - execute_js:
+          expression: "document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+          expect_truthy: true
+
+  - id: mobile-no-overflow
+    phase_ref: 1
+    type: browser_interaction
+    url: "/dashboard"
+    viewport: { width: 375, height: 812 }
+    steps:
+      - execute_js:
+          expression: "document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+          expect_truthy: true
